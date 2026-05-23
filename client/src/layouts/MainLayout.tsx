@@ -82,6 +82,14 @@ export default function MainLayout() {
     "hermes":     "◆ 幽林",
     "light":      "☀ 月岩",
   };
+  const THEME_ICONS: Record<Theme, string> = {
+    "dark": "🌲", "deep-space": "🌌", "smoke-gold": "✦",
+    "catppuccin": "🔮", "hermes": "◆", "light": "☀",
+  };
+  const THEME_NAMES: Record<Theme, string> = {
+    "dark": "暗夜", "deep-space": "星渊", "smoke-gold": "烟金",
+    "catppuccin": "紫幕", "hermes": "幽林", "light": "月岩",
+  };
   const THEME_ACCENTS: Record<Theme, string> = {
     "dark":       "#4ade80",
     "deep-space": "#60a5fa",
@@ -250,7 +258,8 @@ export default function MainLayout() {
                       onClick={() => selectTheme(t)}
                     >
                       <span className="theme-picker-dot" style={{ background: THEME_ACCENTS[t] }} />
-                      <span>{THEME_LABELS[t]}</span>
+                      <span className="theme-picker-icon">{THEME_ICONS[t]}</span>
+                      <span className="theme-picker-name">{THEME_NAMES[t]}</span>
                     </button>
                   ))}
                 </div>
