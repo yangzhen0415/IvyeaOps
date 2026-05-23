@@ -67,60 +67,34 @@
 
 /* ─────────────────────────────────────────────────────────────────
    GLOBAL BACKGROUND ART SYSTEM
-   #root is transparent so body's layered --bg-art shines through.
-   Sidebar/topbar keep solid --bg1 backgrounds, framing the art.
+   SVG silhouette figures positioned on body; #root is transparent.
+   Sidebar/cards keep solid --bg1 so text is always readable.
    ───────────────────────────────────────────────────────────────── */
 
-/* Per-theme art backgrounds live on body */
+/* Default (dark / Terminal Green) */
 :root{
-  --grain-opacity:.038;
-  /* Terminal Green — figure right, green edge-light */
-  --bg-art:
-    radial-gradient(ellipse 9%  12% at 79% 25%, rgba(74,222,128,.09)  0%, transparent 100%),
-    radial-gradient(ellipse 16% 10% at 79% 37%, rgba(74,222,128,.06)  0%, transparent 100%),
-    radial-gradient(ellipse 10% 40% at 79% 62%, rgba(74,222,128,.04)  0%, transparent 80%),
-    radial-gradient(ellipse 40% 60% at 80% 56%, rgba(74,222,128,.025) 0%, transparent 80%),
-    radial-gradient(ellipse 25% 30% at  5% 80%, rgba(74,222,128,.03)  0%, transparent 80%);
+  --grain-opacity:.14;
+  --bg-art: url('/art/fig-dark.svg') no-repeat right bottom / auto 88vh;
 }
 [data-theme=light]{
-  --grain-opacity:.055;
-  /* Moonstone — delicate shadow portrait left, watercolour wash */
-  --bg-art:
-    radial-gradient(ellipse 60% 40% at 18% 10%, rgba(22,163,74,.06)   0%, transparent 80%),
-    radial-gradient(ellipse 9%  12% at 24% 27%, rgba(0,0,0,.07)       0%, transparent 100%),
-    radial-gradient(ellipse 15% 10% at 24% 39%, rgba(0,0,0,.05)       0%, transparent 100%),
-    radial-gradient(ellipse 10% 38% at 24% 62%, rgba(0,0,0,.035)      0%, transparent 80%),
-    radial-gradient(ellipse 35% 55% at 24% 58%, rgba(0,0,0,.02)       0%, transparent 80%);
+  --grain-opacity:.22;
+  --bg-art: url('/art/fig-light.svg') no-repeat left bottom / auto 88vh;
 }
 [data-theme=deep-space]{
-  --grain-opacity:.048;
-  /* Deep Space — cosmonaut silhouette, rim-lit blue */
-  --bg-art:
-    radial-gradient(ellipse 50% 35% at 10% 15%, rgba(56,189,248,.06)  0%, transparent 70%),
-    radial-gradient(ellipse 9%  12% at 77% 25%, rgba(200,222,255,.14) 0%, transparent 100%),
-    radial-gradient(ellipse 17% 10% at 77% 37%, rgba(77,143,255,.09)  0%, transparent 100%),
-    radial-gradient(ellipse 10% 38% at 77% 62%, rgba(77,143,255,.05)  0%, transparent 80%),
-    radial-gradient(ellipse 40% 60% at 77% 56%, rgba(77,143,255,.03)  0%, transparent 80%);
+  --grain-opacity:.16;
+  --bg-art: url('/art/fig-deep-space.svg') no-repeat right bottom / auto 88vh;
 }
 [data-theme=smoke-gold]{
-  --grain-opacity:.055;
-  /* Smoke & Gold — film-noir rim light from left, face right */
-  --bg-art:
-    radial-gradient(ellipse 6%  55% at  3% 45%, rgba(240,160,48,.14)  0%, transparent 100%),
-    radial-gradient(ellipse 9%  12% at 78% 26%, rgba(240,160,48,.11)  0%, transparent 100%),
-    radial-gradient(ellipse 17% 10% at 78% 37%, rgba(240,160,48,.07)  0%, transparent 100%),
-    radial-gradient(ellipse 10% 38% at 78% 62%, rgba(240,160,48,.04)  0%, transparent 80%),
-    radial-gradient(ellipse 40% 60% at 78% 56%, rgba(240,160,48,.025) 0%, transparent 80%);
+  --grain-opacity:.16;
+  --bg-art: url('/art/fig-smoke-gold.svg') no-repeat right bottom / auto 88vh;
 }
 [data-theme=catppuccin]{
-  --grain-opacity:.042;
-  /* Catppuccin — dreamy figure left, purple + sapphire ambient */
-  --bg-art:
-    radial-gradient(ellipse 50% 35% at 90% 80%, rgba(137,180,250,.05) 0%, transparent 70%),
-    radial-gradient(ellipse 9%  12% at 24% 27%, rgba(203,166,247,.11) 0%, transparent 100%),
-    radial-gradient(ellipse 17% 10% at 24% 39%, rgba(137,180,250,.07) 0%, transparent 100%),
-    radial-gradient(ellipse 10% 38% at 24% 62%, rgba(203,166,247,.04) 0%, transparent 80%),
-    radial-gradient(ellipse 38% 58% at 25% 56%, rgba(203,166,247,.025)0%, transparent 80%);
+  --grain-opacity:.15;
+  --bg-art: url('/art/fig-catppuccin.svg') no-repeat left bottom / auto 88vh;
+}
+[data-theme=hermes]{
+  --grain-opacity:.16;
+  --bg-art: url('/art/fig-hermes.svg') no-repeat right bottom / auto 88vh;
 }
 
 /* body carries the art; #root is transparent so the art shows through */
@@ -129,12 +103,12 @@ body{height:100%;color:var(--t);font-family:var(--font);font-size:13px;overflow:
      background:var(--bg-art,none),var(--bg)}
 #root{height:100%;background:transparent;color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden}
 
-/* ── Global eggshell / snowflake grain (SVG feTurbulence fractalNoise) ── */
+/* ── Eggshell / snowflake grain — SVG feTurbulence fractalNoise ── */
 body::after{
   content:'';position:fixed;inset:0;pointer-events:none;z-index:99999;
-  opacity:var(--grain-opacity,.038);
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size:200px 200px;
+  opacity:var(--grain-opacity,.14);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:180px 180px;
 }
 
 /* --- APP SHELL --- */
