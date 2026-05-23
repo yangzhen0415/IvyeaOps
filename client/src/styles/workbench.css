@@ -3,7 +3,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 /* ── Terminal Green (default dark) ── */
 :root{
-  --bg:#0c0c0c;--bg1:#111111;--bg2:#161616;--bg3:#1c1c1c;
+  --bg:rgba(12,12,12,.72);--bg1:rgba(17,17,17,.76);--bg2:rgba(22,22,22,.72);--bg3:rgba(28,28,28,.68);
   --b:#262626;--b2:#383838;--brd:var(--b);
   --t:#e8e8e8;--t2:#888;--t3:#555;
   --acc:#4ade80;
@@ -12,11 +12,11 @@
   --sans:'Inter',system-ui,sans-serif;--r:4px;
   --grain-opacity:.50;
   --warm-glow:rgba(74,222,128,.16);
-  --bg-cover:rgba(12,12,12,.91);
+  --bg-cover:rgba(12,12,12,.80);
 }
 /* ── Moonstone (light) ── */
 [data-theme=light]{
-  --bg:#f0f0ee;--bg1:#ffffff;--bg2:#f8f8f6;--bg3:#efefed;
+  --bg:rgba(240,240,238,.70);--bg1:rgba(255,255,255,.76);--bg2:rgba(248,248,246,.72);--bg3:rgba(239,239,237,.68);
   --b:#dededb;--b2:#c8c8c4;--brd:var(--b);
   --t:#111111;--t2:#555550;--t3:#a0a09a;
   --acc:#16a34a;
@@ -24,44 +24,44 @@
   --font:'Inter',system-ui,sans-serif;
   --grain-opacity:.22;
   --warm-glow:rgba(22,163,74,.10);
-  --bg-cover:rgba(240,240,238,.86);
+  --bg-cover:rgba(240,240,238,.84);
 }
 /* ── Deep Space (electric blue) ── */
 [data-theme=deep-space]{
-  --bg:#060c18;--bg1:#0a1020;--bg2:#0e1628;--bg3:#13203a;
+  --bg:rgba(6,12,24,.72);--bg1:rgba(10,16,32,.76);--bg2:rgba(14,22,40,.72);--bg3:rgba(19,32,58,.68);
   --b:#1e2d4a;--b2:#2d4266;--brd:var(--b);
   --t:#c8deff;--t2:#6a8db0;--t3:#334d6e;
   --acc:#4d8fff;
   --blue:#38bdf8;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
   --grain-opacity:.48;
   --warm-glow:rgba(77,143,255,.20);
-  --bg-cover:rgba(6,12,24,.91);
+  --bg-cover:rgba(6,12,24,.80);
 }
 /* ── Smoke & Gold (amber) ── */
 [data-theme=smoke-gold]{
-  --bg:#0c0c0a;--bg1:#111110;--bg2:#181816;--bg3:#1f1e1b;
+  --bg:rgba(12,12,10,.72);--bg1:rgba(17,17,16,.76);--bg2:rgba(24,24,22,.72);--bg3:rgba(31,30,27,.68);
   --b:#2e2d28;--b2:#454440;--brd:var(--b);
   --t:#e8e0cc;--t2:#8c8470;--t3:#524f44;
   --acc:#f0a030;
   --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
   --grain-opacity:.50;
   --warm-glow:rgba(240,160,48,.26);
-  --bg-cover:rgba(12,12,10,.91);
+  --bg-cover:rgba(12,12,10,.80);
 }
 /* ── Catppuccin Mocha (lavender) ── */
 [data-theme=catppuccin]{
-  --bg:#11111b;--bg1:#1e1e2e;--bg2:#242438;--bg3:#2a2a40;
+  --bg:rgba(17,17,27,.72);--bg1:rgba(30,30,46,.76);--bg2:rgba(36,36,56,.72);--bg3:rgba(42,42,64,.68);
   --b:#383850;--b2:#4e4e6c;--brd:var(--b);
   --t:#cdd6f4;--t2:#a6adc8;--t3:#585b70;
   --acc:#cba6f7;
   --blue:#89b4fa;--amber:#f9e2af;--red:#f38ba8;--purple:#cba6f7;--cyan:#89dceb;
   --grain-opacity:.44;
   --warm-glow:rgba(203,166,247,.18);
-  --bg-cover:rgba(17,17,27,.91);
+  --bg-cover:rgba(17,17,27,.80);
 }
 /* ── Hermes (teal canvas + cream) ── */
 [data-theme=hermes]{
-  --bg:#041c1c;--bg1:#0e2322;--bg2:#152b28;--bg3:#1d3532;
+  --bg:rgba(4,28,28,.72);--bg1:rgba(14,35,34,.76);--bg2:rgba(21,43,40,.72);--bg3:rgba(29,53,50,.68);
   --b:#2b3e3a;--b2:#3e5450;--brd:var(--b);
   --t:#ffe6cb;--t2:#8a8072;--t3:#4c5450;
   --acc:#e8a84a;
@@ -69,7 +69,7 @@
   --font:'Inter',system-ui,sans-serif;
   --grain-opacity:.55;
   --warm-glow:rgba(255,189,56,.35);
-  --bg-cover:rgba(4,28,28,.91);
+  --bg-cover:rgba(4,28,28,.80);
 }
 
 /* ─────────────────────────────────────────────────────────────────
