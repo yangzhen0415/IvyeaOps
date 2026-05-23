@@ -76,16 +76,36 @@ export default function MainLayout() {
   type Theme = typeof THEMES[number];
   const THEME_LABELS: Record<Theme, string> = {
     "dark":       "🌲 暗夜",
-    "deep-space": "🌌 深空蓝",
+    "deep-space": "🌌 星渊",
     "smoke-gold": "✦ 烟金",
     "catppuccin": "🔮 紫幕",
     "hermes":     "◆ 幽林",
     "light":      "☀ 月岩",
   };
+  const THEME_ACCENTS: Record<Theme, string> = {
+    "dark":       "#4ade80",
+    "deep-space": "#60a5fa",
+    "smoke-gold": "#fbbf24",
+    "catppuccin": "#a78bfa",
+    "hermes":     "#34d399",
+    "light":      "#16a34a",
+  };
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("opshub.theme") as Theme | null;
     return THEMES.includes(saved as any) ? saved! : "dark";
   });
+  const [themePicker, setThemePicker] = useState(false);
+  const themePickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!themePicker) return;
+    const handler = (e: MouseEvent) => {
+      if (themePickerRef.current && !themePickerRef.current.contains(e.target as Node))
+        setThemePicker(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [themePicker]);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("opshub.sidebar.collapsed") === "1" || window.innerWidth <= 680,
   );
@@ -119,12 +139,11 @@ export default function MainLayout() {
     return () => clearInterval(t);
   }, []);
 
-  const cycleTheme = () => {
-    const idx = THEMES.indexOf(theme);
-    const next = THEMES[(idx + 1) % THEMES.length];
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("opshub.theme", next);
+  const selectTheme = (t: Theme) => {
+    setTheme(t);
+    document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem("opshub.theme", t);
+    setThemePicker(false);
   };
 
   const toggleSidebar = () => {
@@ -213,14 +232,30 @@ export default function MainLayout() {
             >
               ↻
             </button>
-            <button
-              className="tbtn"
-              onClick={cycleTheme}
-              style={{ minWidth: 72 }}
-              title="切换主题（点击循环）"
-            >
-              {THEME_LABELS[theme]}
-            </button>
+            <div ref={themePickerRef} style={{ position: "relative" }}>
+              <button
+                className="tbtn"
+                onClick={() => setThemePicker(!themePicker)}
+                style={{ minWidth: 72 }}
+                title="切换主题"
+              >
+                {THEME_LABELS[theme]}
+              </button>
+              {themePicker && (
+                <div className="theme-picker">
+                  {THEMES.map((t) => (
+                    <button
+                      key={t}
+                      className={"theme-picker-card" + (t === theme ? " active" : "")}
+                      onClick={() => selectTheme(t)}
+                    >
+                      <span className="theme-picker-dot" style={{ background: THEME_ACCENTS[t] }} />
+                      <span>{THEME_LABELS[t]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button className="tbtn" onClick={handleLogout} title="退出登录">
               ↩ 退出
             </button>
