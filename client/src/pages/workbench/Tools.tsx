@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { fetchAgents, createSession, type AgentInfo } from "../../api/agents";
 import {
   auditDownloadUrl,
   auditGet,
@@ -385,6 +387,9 @@ function AsinAuditPanel() {
       {currentData && state.kind === "done" && (
         <ResultPanel data={currentData} onCollapse={() => setState({ kind: "idle" })} />
       )}
+      {state.kind === "done" && state.data.raw_md && (
+        <AsinDeepAnalysisPanel data={state.data} />
+      )}
       {currentData && state.kind === "polling" && currentData.raw_md && (
         <div style={{ marginTop: 12 }}>
           <div className="ct">实时输出片段</div>
@@ -402,6 +407,115 @@ function AsinAuditPanel() {
           >{currentData.raw_md.slice(-3000)}</pre>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ===================== ASIN deep analysis panel ===================== */
+
+function truncateReport(report: string, maxChars = 8000): string {
+  if (report.length <= maxChars) return report;
+  return report.slice(0, maxChars) + "\n\n[… 报告超出长度，已截断 …]";
+}
+
+const ASIN_ANALYSIS_TYPES = [
+  {
+    id: "listing",
+    icon: "◈",
+    label: "Listing 优化",
+    promptFn: (asin: string, mkt: string, report: string) =>
+      `以下是 ASIN ${asin}（${mkt} 站）的深度审计报告：\n\n${report}\n\n请基于此报告给出 Listing 优化方案：\n1. 标题优化建议（关键词布局、核心卖点排序）\n2. 五点描述改写方向\n3. Q&A / 评论痛点转化为卖点的机会\n4. 图片方案优先级建议`,
+  },
+  {
+    id: "competition",
+    icon: "⬡",
+    label: "竞品策略",
+    promptFn: (asin: string, mkt: string, report: string) =>
+      `以下是 ASIN ${asin}（${mkt} 站）的深度审计报告：\n\n${report}\n\n请基于此报告分析竞争格局并制定差异化策略：\n1. 当前产品相对竞品的优劣势\n2. 竞品流量来源与关键词差距\n3. 差异化切入点（功能 / 价格 / 包装 / 用户群）\n4. 短中长期竞争应对路径`,
+  },
+  {
+    id: "ads",
+    icon: "▦",
+    label: "广告布局",
+    promptFn: (asin: string, mkt: string, report: string) =>
+      `以下是 ASIN ${asin}（${mkt} 站）的深度审计报告：\n\n${report}\n\n请基于此报告制定广告投放策略：\n1. 核心词 / 长尾词 / 竞品 ASIN 投放优先级\n2. 活动结构建议（SP / SB / SD 分层）\n3. 预算分配与竞价策略建议\n4. 广告与 Listing 协同优化要点`,
+  },
+];
+
+function AsinDeepAnalysisPanel({ data }: { data: AuditFull }) {
+  const navigate = useNavigate();
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [selectedType, setSelectedType] = useState(ASIN_ANALYSIS_TYPES[0].id);
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [launching, setLaunching] = useState(false);
+
+  useEffect(() => {
+    fetchAgents().then((list) => {
+      const enabled = list.filter((a) => a.enabled !== false);
+      setAgents(enabled);
+      if (enabled.length > 0) setSelectedAgent(enabled[0].id);
+    }).catch(() => {});
+  }, []);
+
+  const handleStart = async () => {
+    const typeObj = ASIN_ANALYSIS_TYPES.find((t) => t.id === selectedType);
+    const agent = agents.find((a) => a.id === selectedAgent);
+    if (!typeObj || !agent) return;
+    setLaunching(true);
+    try {
+      const s = await createSession({
+        agent_id: agent.id,
+        model: agent.default_model || agent.models[0] || "",
+        title: `${typeObj.label} · ${data.asin} (${data.marketplace})`,
+        workdir: undefined,
+      });
+      const prompt = typeObj.promptFn(data.asin, data.marketplace, truncateReport(data.raw_md || "（无报告）"));
+      sessionStorage.setItem(`opshub-pending-msg-${s.id}`, prompt);
+      sessionStorage.setItem("opshub-jump-session", JSON.stringify({ sessionId: s.id, workdir: null }));
+      navigate("/agents");
+    } catch (e: any) {
+      alert(e?.message || "启动失败");
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  if (agents.length === 0) return null;
+
+  return (
+    <div className="market-deep-panel">
+      <div className="market-deep-title">◎ 深入分析</div>
+      <div className="market-deep-types">
+        {ASIN_ANALYSIS_TYPES.map((t) => (
+          <button
+            key={t.id}
+            className={"market-deep-type" + (selectedType === t.id ? " active" : "")}
+            onClick={() => setSelectedType(t.id)}
+          >
+            <span className="market-deep-type-icon">{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="market-deep-row">
+        <select
+          className="inp"
+          value={selectedAgent}
+          onChange={(e) => setSelectedAgent(e.target.value)}
+          style={{ flex: 1 }}
+        >
+          {agents.map((a) => (
+            <option key={a.id} value={a.id}>{a.display_name}</option>
+          ))}
+        </select>
+        <button
+          className="tbtn market-deep-go"
+          onClick={handleStart}
+          disabled={launching || !selectedAgent}
+        >
+          {launching ? <><span className="spin" style={{ marginRight: 4 }} />启动中…</> : "开始分析 →"}
+        </button>
+      </div>
     </div>
   );
 }
