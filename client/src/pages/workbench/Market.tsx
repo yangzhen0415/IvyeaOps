@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   streamResearch,
   fetchHistory,
@@ -9,6 +10,7 @@ import {
   type SseEvent,
   type HistoryEntry,
 } from "../../api/market";
+import { fetchAgents, createSession, type AgentInfo } from "../../api/agents";
 
 // Local display shape — uses camelCase; converted from the snake_case API type.
 interface LocalHistoryEntry {
@@ -24,6 +26,140 @@ interface LocalHistoryEntry {
 
 function toLocal(e: import("../../api/market").HistoryEntry): LocalHistoryEntry {
   return { ...e, elapsedS: e.elapsed_s };
+}
+
+// ── Deep-analysis panel ───────────────────────────────────────────────────────
+
+const ANALYSIS_TYPES = [
+  {
+    id: "market",
+    icon: "◈",
+    label: "市场诊断",
+    promptFn: (query: string, mkt: string, report: string) =>
+      `以下是一份关于「${query}」（${mkt} 站）的亚马逊市场调研报告，请基于内容进行深度市场诊断：\n1. 整体市场机会评估（规模、趋势）\n2. 竞争格局解读（头部玩家、集中度）\n3. 差异化切入点建议\n4. 主要风险提示\n\n---\n${report}`,
+  },
+  {
+    id: "asin",
+    icon: "⬡",
+    label: "ASIN 深析",
+    promptFn: (query: string, mkt: string, report: string) =>
+      `以下是一份关于「${query}」（${mkt} 站）的亚马逊市场调研报告，请基于内容进行 ASIN 深度分析：\n1. 头部 ASIN 产品特征与共性\n2. 用户评价中的痛点与亮点\n3. 产品差异化改进方向\n4. 具体选品建议\n\n---\n${report}`,
+  },
+  {
+    id: "ads",
+    icon: "▦",
+    label: "广告策略",
+    promptFn: (query: string, mkt: string, report: string) =>
+      `以下是一份关于「${query}」（${mkt} 站）的亚马逊市场调研报告，请基于内容制定广告策略：\n1. 核心关键词布局（品类词、长尾词优先级）\n2. 竞品流量拦截策略（ASIN 精准投放）\n3. 竞价策略与预算分配建议\n4. 广告结构优化方案\n\n---\n${report}`,
+  },
+] as const;
+
+type AnalysisTypeId = typeof ANALYSIS_TYPES[number]["id"];
+
+function truncateReport(report: string, maxChars = 8000): string {
+  if (report.length <= maxChars) return report;
+  return report.slice(0, maxChars) + `\n\n[报告过长，已截取前 ${maxChars} 字符]`;
+}
+
+function DeepAnalysisPanel({
+  query, marketplace, report,
+}: {
+  query: string; marketplace: string; report: string;
+}) {
+  const navigate = useNavigate();
+  const [selectedType, setSelectedType] = useState<AnalysisTypeId>("market");
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetchAgents()
+      .then((list) => {
+        const enabled = list.filter((a) => a.enabled);
+        setAgents(enabled);
+        if (enabled.length > 0) setSelectedAgent(enabled[0].id);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleStart = async () => {
+    if (!selectedAgent || loading) return;
+    setLoading(true);
+    setErr("");
+    try {
+      const typeConf = ANALYSIS_TYPES.find((t) => t.id === selectedType)!;
+      const mktLabel = marketplace;
+      const prompt = typeConf.promptFn(query, mktLabel, truncateReport(report));
+      const agentDef = agents.find((a) => a.id === selectedAgent);
+      const title = `${typeConf.label}：${query} (${marketplace})`;
+      const sess = await createSession({
+        agent_id: selectedAgent,
+        model: agentDef?.default_model ?? undefined,
+        title,
+      });
+      sessionStorage.setItem(`opshub-pending-msg-${sess.id}`, prompt);
+      sessionStorage.setItem("opshub-jump-session", JSON.stringify({
+        sessionId: sess.id,
+        workdir: sess.workdir ?? null,
+      }));
+      navigate("/agents");
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || e?.message || "创建会话失败");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="market-deep-panel">
+      <div className="market-deep-hd">
+        <span className="market-deep-title">深入分析</span>
+        <span className="market-deep-sub">将报告作为上下文，在智能体会话中继续探讨</span>
+      </div>
+      <div className="market-deep-body">
+        {/* Analysis type selector */}
+        <div className="market-deep-types">
+          {ANALYSIS_TYPES.map((t) => (
+            <button
+              key={t.id}
+              className={"market-deep-type" + (selectedType === t.id ? " active" : "")}
+              onClick={() => setSelectedType(t.id)}
+            >
+              <span className="market-deep-type-icon">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Agent selector + start */}
+        <div className="market-deep-actions">
+          {agents.length > 0 ? (
+            <select
+              className="market-deep-agent-select"
+              value={selectedAgent}
+              onChange={(e) => setSelectedAgent(e.target.value)}
+              disabled={loading}
+            >
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>{a.display_name || a.id}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="market-deep-no-agent">暂无可用智能体</span>
+          )}
+          <button
+            className="market-deep-start-btn"
+            onClick={handleStart}
+            disabled={loading || !selectedAgent}
+          >
+            {loading ? "创建中…" : "开始分析 →"}
+          </button>
+        </div>
+
+        {err && <div className="market-deep-err">{err}</div>}
+      </div>
+    </div>
+  );
 }
 
 const MARKETPLACES: { code: string; flag: string; name: string }[] = [
@@ -531,6 +667,11 @@ export default function Market() {
             数据来源：Sorftime MCP &nbsp;·&nbsp; AI：Claude → Hermes → Codex
           </div>
         </div>
+      )}
+
+      {/* Deep analysis panel — visible after report is done */}
+      {phase === "done" && report && (
+        <DeepAnalysisPanel query={query} marketplace={marketplace} report={report} />
       )}
 
       {/* History drawer backdrop */}

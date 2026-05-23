@@ -18,6 +18,7 @@ export default function ChatPane({ session }: Props) {
   const [showCli, setShowCli] = useState(false);
   const [showInherited, setShowInherited] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<string[]>([]);
 
@@ -34,6 +35,20 @@ export default function ChatPane({ session }: Props) {
     setMessages([]);
     setPartial("");
     refresh();
+    // Pre-fill input if a pending context message was stored by another page
+    const pendingKey = `opshub-pending-msg-${session.id}`;
+    const pending = sessionStorage.getItem(pendingKey);
+    if (pending) {
+      sessionStorage.removeItem(pendingKey);
+      setInput(pending);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(0, 0);
+          textareaRef.current.scrollTop = 0;
+        }
+      }, 150);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);
 
@@ -210,6 +225,7 @@ export default function ChatPane({ session }: Props) {
             }}
           />
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

@@ -1453,6 +1453,25 @@ html,body,#root{height:100%;background:var(--bg);color:var(--t);font-family:var(
 .market-history-count{background:rgba(74,222,128,.14);color:var(--acc);border-radius:999px;font-size:9px;padding:1px 6px;border:1px solid rgba(74,222,128,.22);line-height:1.4}
 
 /* Backdrop */
+/* Deep analysis panel */
+.market-deep-panel{background:var(--bg2);border:1px solid var(--b);border-radius:8px;overflow:hidden;margin-bottom:2px}
+.market-deep-hd{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b)}
+.market-deep-title{font-size:12px;font-weight:600;color:var(--t)}
+.market-deep-sub{font-size:11px;color:var(--t3)}
+.market-deep-body{padding:10px 14px;display:flex;flex-direction:column;gap:10px}
+.market-deep-types{display:flex;gap:6px;flex-wrap:wrap}
+.market-deep-type{display:flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--b);border-radius:20px;background:var(--bg1);color:var(--t2);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .15s}
+.market-deep-type:hover{border-color:var(--acc);color:var(--t)}
+.market-deep-type.active{border-color:var(--acc);background:rgba(74,222,128,.1);color:var(--acc);font-weight:600}
+.market-deep-type-icon{font-size:13px}
+.market-deep-actions{display:flex;align-items:center;gap:8px}
+.market-deep-agent-select{background:var(--bg1);border:1px solid var(--b);border-radius:4px;color:var(--t2);font-size:12px;padding:4px 8px;font-family:var(--font);cursor:pointer}
+.market-deep-agent-select:focus{outline:none;border-color:var(--acc)}
+.market-deep-no-agent{font-size:11px;color:var(--t3)}
+.market-deep-start-btn{padding:5px 14px;border-radius:4px;border:none;background:var(--acc);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:opacity .15s}
+.market-deep-start-btn:hover{opacity:.88}
+.market-deep-start-btn:disabled{opacity:.45;cursor:not-allowed}
+.market-deep-err{font-size:11px;color:var(--red)}
 .market-history-backdrop{position:fixed;inset:0;z-index:490;background:rgba(0,0,0,.35);backdrop-filter:blur(1px)}
 
 /* Drawer */

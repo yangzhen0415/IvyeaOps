@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../../components/ConfirmDialog";
 import { useWorkspaceData } from "./useWorkspaceData";
@@ -66,6 +66,11 @@ export default function Workspace() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Cross-page jump: Market (and other pages) can navigate here with a new
+  // session pre-created and stored in sessionStorage.
+  const jumpRef = useRef<{ sessionId: string; workdir: string | null } | null>(null);
+  const jumpTriedRefreshRef = useRef(false);
+
   // Global ⌘K / Ctrl+K to toggle the command palette. Avoid swallowing
   // the shortcut when the user is typing inside an input/textarea that
   // already handles it (e.g. xterm has its own copy handler).
@@ -98,6 +103,46 @@ export default function Workspace() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // On mount: read pending jump request from sessionStorage
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("opshub-jump-session");
+      if (raw) {
+        sessionStorage.removeItem("opshub-jump-session");
+        jumpRef.current = JSON.parse(raw);
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When projects update: process any pending jump
+  useEffect(() => {
+    if (!jumpRef.current || loadingProjects) return;
+    const jump = jumpRef.current;
+    const targetPath = jump.workdir || "(unknown)";
+    const proj = projects.find((p) => p.path === targetPath)
+      ?? projects.find((p) => p.path === "(unknown)");
+
+    if (!proj) {
+      if (!jumpTriedRefreshRef.current) {
+        jumpTriedRefreshRef.current = true;
+        void refresh();
+      } else {
+        jumpRef.current = null; // give up after one refresh
+      }
+      return;
+    }
+
+    jumpRef.current = null;
+    jumpTriedRefreshRef.current = false;
+    setExpanded((s) => new Set(s).add(proj.id));
+    loadSessions(proj.id).then(() => {
+      setSelection({ projectId: proj.id, sessionId: jump.sessionId, sessionSource: "hub" });
+      setActiveTab("chat");
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, loadingProjects]);
 
   const onToggleExpand = useCallback((projectId: string) => {
     setExpanded((prev) => {
