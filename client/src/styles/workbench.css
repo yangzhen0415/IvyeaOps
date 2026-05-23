@@ -46,6 +46,28 @@
   --acc:#cba6f7;
   --blue:#89b4fa;--amber:#f9e2af;--red:#f38ba8;--purple:#cba6f7;--cyan:#89dceb;
 }
+
+/* ── Hermes (Nous DS — teal canvas + cream midground + grain) ── */
+[data-theme=hermes]{
+  /* --bg is a gradient so the warm amber glow renders in all transparent areas */
+  --bg:radial-gradient(ellipse 120% 55% at 50% -8%, rgba(255,189,56,.22) 0%, transparent 62%), #041c1c;
+  --bg1:#0e2322;--bg2:#152b28;--bg3:#1d3532;
+  --b:#2b3e3a;--b2:#3e5450;--brd:var(--b);
+  --t:#ffe6cb;--t2:#8a8072;--t3:#4c5450;
+  --acc:#e8a84a;
+  --blue:#6ecfcf;--amber:#ffbd38;--red:#f87a7a;--purple:#c49ff5;--cyan:#4dd4c0;
+  --font:'Inter',system-ui,sans-serif;
+}
+/* Grain noise texture — 2×2 repeating conic, same technique as Nous DS */
+[data-theme=hermes] body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:99999;
+  background:repeating-conic-gradient(rgba(255,230,203,.055) 0% 25%, transparent 0% 50%) 0 0/2px 2px;
+}
+/* Sidebar & topbar stay solid so the glow is framed by the dark surround */
+[data-theme=hermes] .sb,
+[data-theme=hermes] .topbar,
+[data-theme=hermes] .ws-topbar{background:var(--bg1)}
+
 html,body,#root{height:100%;background:var(--bg);color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden}
 
 /* --- APP SHELL --- */

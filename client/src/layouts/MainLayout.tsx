@@ -72,13 +72,14 @@ export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [termMounted, setTermMounted] = useState(false);
-  const THEMES = ["dark", "deep-space", "smoke-gold", "catppuccin", "light"] as const;
+  const THEMES = ["dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light"] as const;
   type Theme = typeof THEMES[number];
   const THEME_LABELS: Record<Theme, string> = {
     "dark":       "🌲 终端绿",
     "deep-space": "🌌 深空蓝",
     "smoke-gold": "✦ 烟金",
     "catppuccin": "🔮 紫幕",
+    "hermes":     "◆ Hermes",
     "light":      "☀ 月岩",
   };
   const [theme, setTheme] = useState<Theme>(() => {
