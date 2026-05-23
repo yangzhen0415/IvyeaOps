@@ -47,28 +47,95 @@
   --blue:#89b4fa;--amber:#f9e2af;--red:#f38ba8;--purple:#cba6f7;--cyan:#89dceb;
 }
 
-/* ── Hermes (Nous DS — teal canvas + cream midground + grain) ── */
+/* ── Hermes (Nous DS — teal canvas + cream midground) ── */
 [data-theme=hermes]{
-  /* --bg is a gradient so the warm amber glow renders in all transparent areas */
-  --bg:radial-gradient(ellipse 120% 55% at 50% -8%, rgba(255,189,56,.22) 0%, transparent 62%), #041c1c;
-  --bg1:#0e2322;--bg2:#152b28;--bg3:#1d3532;
+  --bg:#041c1c;--bg1:#0e2322;--bg2:#152b28;--bg3:#1d3532;
   --b:#2b3e3a;--b2:#3e5450;--brd:var(--b);
   --t:#ffe6cb;--t2:#8a8072;--t3:#4c5450;
   --acc:#e8a84a;
   --blue:#6ecfcf;--amber:#ffbd38;--red:#f87a7a;--purple:#c49ff5;--cyan:#4dd4c0;
   --font:'Inter',system-ui,sans-serif;
+  --grain-opacity:.055;
+  /* warm top glow + figure silhouette right */
+  --bg-art:
+    radial-gradient(ellipse 110% 50% at 50% -6%, rgba(255,189,56,.20) 0%, transparent 58%),
+    radial-gradient(ellipse 8%  12% at 78% 25%, rgba(255,230,203,.18) 0%, transparent 100%),
+    radial-gradient(ellipse 15% 10% at 78% 37%, rgba(232,168,74,.12)  0%, transparent 100%),
+    radial-gradient(ellipse 10% 38% at 78% 60%, rgba(232,168,74,.07)  0%, transparent 80%),
+    radial-gradient(ellipse 35% 55% at 78% 58%, rgba(232,168,74,.04)  0%, transparent 80%);
 }
-/* Grain noise texture — 2×2 repeating conic, same technique as Nous DS */
-[data-theme=hermes] body::after{
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:99999;
-  background:repeating-conic-gradient(rgba(255,230,203,.055) 0% 25%, transparent 0% 50%) 0 0/2px 2px;
-}
-/* Sidebar & topbar stay solid so the glow is framed by the dark surround */
-[data-theme=hermes] .sb,
-[data-theme=hermes] .topbar,
-[data-theme=hermes] .ws-topbar{background:var(--bg1)}
 
-html,body,#root{height:100%;background:var(--bg);color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden}
+/* ─────────────────────────────────────────────────────────────────
+   GLOBAL BACKGROUND ART SYSTEM
+   #root is transparent so body's layered --bg-art shines through.
+   Sidebar/topbar keep solid --bg1 backgrounds, framing the art.
+   ───────────────────────────────────────────────────────────────── */
+
+/* Per-theme art backgrounds live on body */
+:root{
+  --grain-opacity:.038;
+  /* Terminal Green — figure right, green edge-light */
+  --bg-art:
+    radial-gradient(ellipse 9%  12% at 79% 25%, rgba(74,222,128,.09)  0%, transparent 100%),
+    radial-gradient(ellipse 16% 10% at 79% 37%, rgba(74,222,128,.06)  0%, transparent 100%),
+    radial-gradient(ellipse 10% 40% at 79% 62%, rgba(74,222,128,.04)  0%, transparent 80%),
+    radial-gradient(ellipse 40% 60% at 80% 56%, rgba(74,222,128,.025) 0%, transparent 80%),
+    radial-gradient(ellipse 25% 30% at  5% 80%, rgba(74,222,128,.03)  0%, transparent 80%);
+}
+[data-theme=light]{
+  --grain-opacity:.055;
+  /* Moonstone — delicate shadow portrait left, watercolour wash */
+  --bg-art:
+    radial-gradient(ellipse 60% 40% at 18% 10%, rgba(22,163,74,.06)   0%, transparent 80%),
+    radial-gradient(ellipse 9%  12% at 24% 27%, rgba(0,0,0,.07)       0%, transparent 100%),
+    radial-gradient(ellipse 15% 10% at 24% 39%, rgba(0,0,0,.05)       0%, transparent 100%),
+    radial-gradient(ellipse 10% 38% at 24% 62%, rgba(0,0,0,.035)      0%, transparent 80%),
+    radial-gradient(ellipse 35% 55% at 24% 58%, rgba(0,0,0,.02)       0%, transparent 80%);
+}
+[data-theme=deep-space]{
+  --grain-opacity:.048;
+  /* Deep Space — cosmonaut silhouette, rim-lit blue */
+  --bg-art:
+    radial-gradient(ellipse 50% 35% at 10% 15%, rgba(56,189,248,.06)  0%, transparent 70%),
+    radial-gradient(ellipse 9%  12% at 77% 25%, rgba(200,222,255,.14) 0%, transparent 100%),
+    radial-gradient(ellipse 17% 10% at 77% 37%, rgba(77,143,255,.09)  0%, transparent 100%),
+    radial-gradient(ellipse 10% 38% at 77% 62%, rgba(77,143,255,.05)  0%, transparent 80%),
+    radial-gradient(ellipse 40% 60% at 77% 56%, rgba(77,143,255,.03)  0%, transparent 80%);
+}
+[data-theme=smoke-gold]{
+  --grain-opacity:.055;
+  /* Smoke & Gold — film-noir rim light from left, face right */
+  --bg-art:
+    radial-gradient(ellipse 6%  55% at  3% 45%, rgba(240,160,48,.14)  0%, transparent 100%),
+    radial-gradient(ellipse 9%  12% at 78% 26%, rgba(240,160,48,.11)  0%, transparent 100%),
+    radial-gradient(ellipse 17% 10% at 78% 37%, rgba(240,160,48,.07)  0%, transparent 100%),
+    radial-gradient(ellipse 10% 38% at 78% 62%, rgba(240,160,48,.04)  0%, transparent 80%),
+    radial-gradient(ellipse 40% 60% at 78% 56%, rgba(240,160,48,.025) 0%, transparent 80%);
+}
+[data-theme=catppuccin]{
+  --grain-opacity:.042;
+  /* Catppuccin — dreamy figure left, purple + sapphire ambient */
+  --bg-art:
+    radial-gradient(ellipse 50% 35% at 90% 80%, rgba(137,180,250,.05) 0%, transparent 70%),
+    radial-gradient(ellipse 9%  12% at 24% 27%, rgba(203,166,247,.11) 0%, transparent 100%),
+    radial-gradient(ellipse 17% 10% at 24% 39%, rgba(137,180,250,.07) 0%, transparent 100%),
+    radial-gradient(ellipse 10% 38% at 24% 62%, rgba(203,166,247,.04) 0%, transparent 80%),
+    radial-gradient(ellipse 38% 58% at 25% 56%, rgba(203,166,247,.025)0%, transparent 80%);
+}
+
+/* body carries the art; #root is transparent so the art shows through */
+html{height:100%;background:var(--bg);color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden}
+body{height:100%;color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden;
+     background:var(--bg-art,none),var(--bg)}
+#root{height:100%;background:transparent;color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden}
+
+/* ── Global eggshell / snowflake grain (SVG feTurbulence fractalNoise) ── */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:99999;
+  opacity:var(--grain-opacity,.038);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:200px 200px;
+}
 
 /* --- APP SHELL --- */
 .app{display:flex;height:100vh;height:100dvh}
