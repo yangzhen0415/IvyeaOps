@@ -90,6 +90,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[ops-hub] ad-audit stale sweep skipped: {e}")
 
+    # Market research history DB.
+    try:
+        from app.routers.market import _init_history_db as _init_market_hist
+        _init_market_hist()
+        print("[ops-hub] market history DB ready")
+    except Exception as e:
+        print(f"[ops-hub] market history DB init skipped: {e}")
+
     # Brain chat/upload metadata DB is local SQLite; initialize eagerly so
     # schema problems are visible at boot, while keeping the service lightweight.
     try:

@@ -1,5 +1,42 @@
 export type ResearchMode = "keyword" | "asin";
 
+export interface HistoryEntry {
+  id: string;
+  mode: ResearchMode;
+  query: string;
+  marketplace: string;
+  provider: string;
+  elapsed_s: number;
+  ts: number;
+  report: string;
+}
+
+export async function fetchHistory(): Promise<HistoryEntry[]> {
+  const r = await fetch("/api/market/history", { credentials: "include" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function saveHistoryEntry(entry: HistoryEntry): Promise<void> {
+  await fetch("/api/market/history", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ...entry, elapsed_s: entry.elapsed_s }),
+  });
+}
+
+export async function deleteHistoryEntry(id: string): Promise<void> {
+  await fetch(`/api/market/history/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
+export async function clearHistory(): Promise<void> {
+  await fetch("/api/market/history", { method: "DELETE", credentials: "include" });
+}
+
 export interface ResearchReq {
   mode: ResearchMode;
   query: string;

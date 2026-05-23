@@ -1,5 +1,30 @@
 import { useEffect, useRef, useState } from "react";
-import { streamResearch, type ResearchMode, type SseEvent } from "../../api/market";
+import {
+  streamResearch,
+  fetchHistory,
+  saveHistoryEntry,
+  deleteHistoryEntry,
+  clearHistory as apiClearHistory,
+  type ResearchMode,
+  type SseEvent,
+  type HistoryEntry,
+} from "../../api/market";
+
+// Local display shape — uses camelCase; converted from the snake_case API type.
+interface LocalHistoryEntry {
+  id: string;
+  mode: ResearchMode;
+  query: string;
+  marketplace: string;
+  provider: string;
+  elapsedS: number;
+  ts: number;
+  report: string;
+}
+
+function toLocal(e: import("../../api/market").HistoryEntry): LocalHistoryEntry {
+  return { ...e, elapsedS: e.elapsed_s };
+}
 
 const MARKETPLACES: { code: string; flag: string; name: string }[] = [
   { code: "US", flag: "🇺🇸", name: "美国" },
@@ -18,20 +43,6 @@ const EXAMPLE_QUERIES: Record<ResearchMode, string[]> = {
   keyword: ["wireless earbuds", "yoga mat", "air fryer", "led desk lamp"],
   asin: ["B08N5WRWNW", "B09G9FPHY6", "B07ZPKN6YR"],
 };
-
-const HISTORY_KEY = "ops-market-history";
-const HISTORY_MAX = 60;
-
-interface HistoryEntry {
-  id: string;
-  mode: ResearchMode;
-  query: string;
-  marketplace: string;
-  provider: string;
-  elapsedS: number;
-  ts: number;
-  report: string;
-}
 
 type Phase = "idle" | "collecting" | "synthesizing" | "done" | "error";
 
@@ -61,7 +72,7 @@ export default function Market() {
   const [dlMenuOpen, setDlMenuOpen] = useState(false);
   const [liveTimer, setLiveTimer] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<LocalHistoryEntry[]>([]);
 
   const abortRef = useRef<AbortController | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -198,32 +209,56 @@ export default function Market() {
   };
 
   // ── History ───────────────────────────────────────────────────────────────
-  // Load on mount
+  // Load on mount; migrate any leftover localStorage entries on first run
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      if (raw) setHistory(JSON.parse(raw));
-    } catch {}
+    const LEGACY_KEY = "ops-market-history";
+    fetchHistory().then(async (serverEntries) => {
+      // One-time migration: upload localStorage entries not already on the server
+      try {
+        const raw = localStorage.getItem(LEGACY_KEY);
+        if (raw) {
+          const local: any[] = JSON.parse(raw);
+          const serverIds = new Set(serverEntries.map((e) => e.id));
+          const toMigrate = local.filter((e) => e.id && !serverIds.has(e.id));
+          for (const e of toMigrate) {
+            await saveHistoryEntry({
+              id: e.id,
+              mode: e.mode,
+              query: e.query,
+              marketplace: e.marketplace,
+              provider: e.provider ?? "",
+              elapsed_s: e.elapsedS ?? e.elapsed_s ?? 0,
+              ts: e.ts,
+              report: e.report ?? "",
+            }).catch(() => {});
+          }
+          localStorage.removeItem(LEGACY_KEY);
+          if (toMigrate.length > 0) {
+            // Reload merged list from server
+            return fetchHistory();
+          }
+        }
+      } catch {}
+      return serverEntries;
+    }).then((entries) => setHistory(entries.map(toLocal))).catch(() => {});
   }, []);
 
   // Save when a report finishes
   useEffect(() => {
     if (phase !== "done" || !report) return;
-    const entry: HistoryEntry = {
-      id: Date.now().toString(),
+    const ts = Date.now();
+    const apiEntry: import("../../api/market").HistoryEntry = {
+      id: ts.toString(),
       mode, query, marketplace,
-      provider, elapsedS: elapsedS ?? 0,
-      ts: Date.now(), report,
+      provider, elapsed_s: elapsedS ?? 0,
+      ts, report,
     };
-    setHistory((prev) => {
-      const next = [entry, ...prev].slice(0, HISTORY_MAX);
-      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
+    saveHistoryEntry(apiEntry).catch(() => {});
+    setHistory((prev) => [toLocal(apiEntry), ...prev].slice(0, 60));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  const handleLoadHistory = (entry: HistoryEntry) => {
+  const handleLoadHistory = (entry: LocalHistoryEntry) => {
     setMode(entry.mode);
     setQuery(entry.query);
     setMarketplace(entry.marketplace);
@@ -238,16 +273,13 @@ export default function Market() {
 
   const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setHistory((prev) => {
-      const next = prev.filter((h) => h.id !== id);
-      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
+    deleteHistoryEntry(id).catch(() => {});
+    setHistory((prev) => prev.filter((h) => h.id !== id));
   };
 
   const handleClearHistory = () => {
+    apiClearHistory().catch(() => {});
     setHistory([]);
-    try { localStorage.removeItem(HISTORY_KEY); } catch {}
   };
 
   const isRunning = phase === "collecting" || phase === "synthesizing";

@@ -1,19 +1,108 @@
-"""Market research router — SSE streaming endpoint."""
+"""Market research router — SSE streaming endpoint + history persistence."""
 from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import time
-from typing import AsyncGenerator
+import uuid
+from pathlib import Path
+from typing import AsyncGenerator, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.core.security import require_user
 from app.services import sorftime_service, ai_synthesis_service
 
 router = APIRouter()
+
+# ── History DB ────────────────────────────────────────────────────────────────
+
+_HISTORY_DB = settings.data_dir / "market_history.sqlite3"
+_HISTORY_MAX = 60
+
+
+def _history_connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(_HISTORY_DB), isolation_level=None, timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+def _init_history_db() -> None:
+    with _history_connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS market_history (
+                id          TEXT PRIMARY KEY,
+                mode        TEXT NOT NULL,
+                query       TEXT NOT NULL,
+                marketplace TEXT NOT NULL,
+                provider    TEXT NOT NULL DEFAULT '',
+                elapsed_s   REAL NOT NULL DEFAULT 0,
+                ts          INTEGER NOT NULL,
+                report      TEXT NOT NULL DEFAULT ''
+            )
+        """)
+
+
+class HistoryEntryIn(BaseModel):
+    id: str = ""
+    mode: str
+    query: str
+    marketplace: str
+    provider: str = ""
+    elapsed_s: float = 0.0
+    ts: int
+    report: str = ""
+
+
+@router.get("/history")
+def get_history(_user: str = Depends(require_user)) -> List[dict]:
+    with _history_connect() as conn:
+        rows = conn.execute(
+            "SELECT id,mode,query,marketplace,provider,elapsed_s,ts,report "
+            "FROM market_history ORDER BY ts DESC LIMIT ?",
+            (_HISTORY_MAX,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/history")
+def add_history(entry: HistoryEntryIn, _user: str = Depends(require_user)) -> dict:
+    entry_id = entry.id or str(int(entry.ts)) or uuid.uuid4().hex
+    with _history_connect() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO market_history "
+            "(id,mode,query,marketplace,provider,elapsed_s,ts,report) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (entry_id, entry.mode, entry.query, entry.marketplace,
+             entry.provider, entry.elapsed_s, entry.ts, entry.report),
+        )
+        # Trim to max entries (keep most recent)
+        conn.execute(
+            "DELETE FROM market_history WHERE id NOT IN "
+            "(SELECT id FROM market_history ORDER BY ts DESC LIMIT ?)",
+            (_HISTORY_MAX,),
+        )
+    return {"id": entry_id}
+
+
+@router.delete("/history/{entry_id}")
+def delete_history_entry(entry_id: str, _user: str = Depends(require_user)) -> dict:
+    with _history_connect() as conn:
+        conn.execute("DELETE FROM market_history WHERE id=?", (entry_id,))
+    return {"ok": True}
+
+
+@router.delete("/history")
+def clear_history(_user: str = Depends(require_user)) -> dict:
+    with _history_connect() as conn:
+        conn.execute("DELETE FROM market_history")
+    return {"ok": True}
 
 
 class ResearchReq(BaseModel):
