@@ -166,7 +166,7 @@ body::after{
 .content:has(.agent-hub),.content-fullpage{padding:0;overflow:hidden;display:flex;flex-direction:column}
 .content::-webkit-scrollbar{width:3px}
 .content::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
-.ptitle{font-size:9px;color:var(--t3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--b)}
+.ptitle{font-size:9px;color:var(--t3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--b)}
 
 /* --- LAYOUT HELPERS --- */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -786,7 +786,7 @@ body::after{
 .terminal-workbench-page{height:calc(100vh - 72px);max-height:calc(100dvh - 72px);display:flex;flex-direction:column;min-height:0}
 .terminal-page-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .terminal-page-actions{font-size:9px;color:var(--t3);text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.terminal-workbench{flex:1;min-height:0;display:grid;grid-template-columns:260px minmax(0,1fr) 360px;gap:12px}
+.terminal-workbench{flex:1;min-height:0;display:grid;grid-template-columns:260px minmax(0,1fr) 360px;gap:6px}
 .terminal-session-list,.terminal-main,.terminal-history-panel{min-height:0;display:flex;flex-direction:column;padding:10px 12px;background:var(--bg2);border:1px solid var(--b);border-radius:var(--r)}
 .terminal-section-title{font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
 .terminal-session-scroll,.terminal-history-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
