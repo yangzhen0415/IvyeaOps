@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { fetchAgents, createSession, type AgentInfo } from "../../api/agents";
 import {
   adAuditClearFailed,
   adAuditDelete,
@@ -411,6 +413,9 @@ export default function AdAuditPanel() {
 
       {/* Result */}
       {state.kind === "done" && <AdResultPanel data={state.data} onReset={reset} />}
+      {state.kind === "done" && state.data.raw_md && (
+        <AdDeepAnalysisPanel data={state.data} />
+      )}
 
       {/* Disable global actions while working */}
       <div style={{ display: "none" }}>{isWorking ? "" : ""}</div>
@@ -866,6 +871,117 @@ function AdStatusTag({ status }: { status: string }) {
     status === "uploaded"  ? "待启动" :
     status === "cancelled" ? "已取消" : status;
   return <span className={"tag " + cls}>{label}</span>;
+}
+
+/* ===================== Deep analysis panel ===================== */
+
+function truncateReport(report: string, maxChars = 8000): string {
+  if (report.length <= maxChars) return report;
+  return report.slice(0, maxChars) + "\n\n[… 报告超出长度，已截断 …]";
+}
+
+const AD_ANALYSIS_TYPES = [
+  {
+    id: "bid",
+    icon: "▦",
+    label: "竞价优化",
+    promptFn: (ctx: string, report: string) =>
+      `以下是广告审计报告（${ctx}）：\n\n${report}\n\n请基于此报告深入分析竞价策略，给出：\n1. 各匹配类型建议竞价区间\n2. 高效词竞价提升方案\n3. 低效词竞价削减或暂停建议\n4. 位置竞价系数调整建议`,
+  },
+  {
+    id: "keywords",
+    icon: "⬡",
+    label: "关键词策略",
+    promptFn: (ctx: string, report: string) =>
+      `以下是广告审计报告（${ctx}）：\n\n${report}\n\n请基于此报告深入分析关键词策略，给出：\n1. 优先否词清单及否词层级建议（活动/广告组级别）\n2. 新增关键词优先级排序\n3. 匹配类型迁移建议（Auto→Exact/Phrase）\n4. 长尾词挖掘机会`,
+  },
+  {
+    id: "structure",
+    icon: "◈",
+    label: "广告结构",
+    promptFn: (ctx: string, report: string) =>
+      `以下是广告审计报告（${ctx}）：\n\n${report}\n\n请基于此报告分析广告活动结构，给出：\n1. 活动/广告组拆分优化建议\n2. 预算分配调整方案\n3. 广告位策略（搜索顶部 vs 商品页面 vs 其他）\n4. 整体账户结构优化路线图`,
+  },
+];
+
+function AdDeepAnalysisPanel({ data }: { data: AdAuditFull }) {
+  const navigate = useNavigate();
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [selectedType, setSelectedType] = useState(AD_ANALYSIS_TYPES[0].id);
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [launching, setLaunching] = useState(false);
+
+  useEffect(() => {
+    fetchAgents().then((list) => {
+      const enabled = list.filter((a) => a.enabled !== false);
+      setAgents(enabled);
+      if (enabled.length > 0) setSelectedAgent(enabled[0].id);
+    }).catch(() => {});
+  }, []);
+
+  const context = `${data.ad_type || "广告"} · ${data.file_name} · ${data.marketplace}`;
+  const report = truncateReport(data.raw_md || "（无原始报告）");
+
+  const handleStart = async () => {
+    const typeObj = AD_ANALYSIS_TYPES.find((t) => t.id === selectedType);
+    const agent = agents.find((a) => a.id === selectedAgent);
+    if (!typeObj || !agent) return;
+    setLaunching(true);
+    try {
+      const s = await createSession({
+        agent_id: agent.id,
+        model: agent.default_model || agent.models[0] || "",
+        title: `${typeObj.label} · ${data.file_name}`,
+        workdir: undefined,
+      });
+      sessionStorage.setItem(`opshub-pending-msg-${s.id}`, typeObj.promptFn(context, report));
+      sessionStorage.setItem("opshub-jump-session", JSON.stringify({ sessionId: s.id, workdir: null }));
+      navigate("/agents");
+    } catch (e: any) {
+      alert(e?.message || "启动失败");
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  if (agents.length === 0) return null;
+
+  return (
+    <div className="market-deep-panel">
+      <div className="market-deep-title">◎ 深入分析</div>
+      <div className="market-deep-types">
+        {AD_ANALYSIS_TYPES.map((t) => (
+          <button
+            key={t.id}
+            className={"market-deep-type" + (selectedType === t.id ? " active" : "")}
+            onClick={() => setSelectedType(t.id)}
+          >
+            <span className="market-deep-type-icon">{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="market-deep-row">
+        <select
+          className="inp"
+          value={selectedAgent}
+          onChange={(e) => setSelectedAgent(e.target.value)}
+          style={{ flex: 1 }}
+        >
+          {agents.map((a) => (
+            <option key={a.id} value={a.id}>{a.display_name}</option>
+          ))}
+        </select>
+        <button
+          className="tbtn market-deep-go"
+          onClick={handleStart}
+          disabled={launching || !selectedAgent}
+        >
+          {launching ? <><span className="spin" style={{ marginRight: 4 }} />启动中…</> : "开始分析 →"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /* ===================== Result panel ===================== */
