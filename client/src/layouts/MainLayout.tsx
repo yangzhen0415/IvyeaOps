@@ -72,31 +72,61 @@ export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [termMounted, setTermMounted] = useState(false);
-  const THEMES = ["dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light"] as const;
+  const THEMES = [
+    "dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light",
+    "klein", "mars", "hermes-orange", "burgundy", "mummy",
+    "prussian", "tiffany", "titian", "schonbrunn", "bordeaux",
+  ] as const;
   type Theme = typeof THEMES[number];
   const THEME_LABELS: Record<Theme, string> = {
-    "dark":       "🌲 暗夜",
-    "deep-space": "🌌 星渊",
-    "smoke-gold": "✦ 烟金",
-    "catppuccin": "🔮 紫幕",
-    "hermes":     "◆ 幽林",
-    "light":      "☀ 月岩",
+    "dark":         "🌲 暗夜",
+    "deep-space":   "🌌 星渊",
+    "smoke-gold":   "✦ 烟金",
+    "catppuccin":   "🔮 紫幕",
+    "hermes":       "◆ 幽林",
+    "light":        "☀ 月岩",
+    "klein":        "◈ 克莱蓝",
+    "mars":         "⬡ 马尔绿",
+    "hermes-orange":"◉ 爱马橙",
+    "burgundy":     "⊕ 勃艮红",
+    "mummy":        "△ 木乃棕",
+    "prussian":     "▣ 普鲁蓝",
+    "tiffany":      "◇ 蒂芙蓝",
+    "titian":       "✦ 提香红",
+    "schonbrunn":   "⊙ 申布黄",
+    "bordeaux":     "⊗ 波尔红",
   };
   const THEME_ICONS: Record<Theme, string> = {
     "dark": "🌲", "deep-space": "🌌", "smoke-gold": "✦",
     "catppuccin": "🔮", "hermes": "◆", "light": "☀",
+    "klein": "◈", "mars": "⬡", "hermes-orange": "◉",
+    "burgundy": "⊕", "mummy": "△", "prussian": "▣",
+    "tiffany": "◇", "titian": "✦", "schonbrunn": "⊙", "bordeaux": "⊗",
   };
   const THEME_NAMES: Record<Theme, string> = {
     "dark": "暗夜", "deep-space": "星渊", "smoke-gold": "烟金",
     "catppuccin": "紫幕", "hermes": "幽林", "light": "月岩",
+    "klein": "克莱蓝", "mars": "马尔绿", "hermes-orange": "爱马橙",
+    "burgundy": "勃艮红", "mummy": "木乃棕", "prussian": "普鲁蓝",
+    "tiffany": "蒂芙蓝", "titian": "提香红", "schonbrunn": "申布黄", "bordeaux": "波尔红",
   };
   const THEME_ACCENTS: Record<Theme, string> = {
-    "dark":       "#4ade80",
-    "deep-space": "#60a5fa",
-    "smoke-gold": "#fbbf24",
-    "catppuccin": "#a78bfa",
-    "hermes":     "#34d399",
-    "light":      "#16a34a",
+    "dark":         "#4ade80",
+    "deep-space":   "#60a5fa",
+    "smoke-gold":   "#fbbf24",
+    "catppuccin":   "#a78bfa",
+    "hermes":       "#34d399",
+    "light":        "#16a34a",
+    "klein":        "#4d7fff",
+    "mars":         "#8aad3c",
+    "hermes-orange":"#f46020",
+    "burgundy":     "#c03060",
+    "mummy":        "#c87838",
+    "prussian":     "#2d8ab5",
+    "tiffany":      "#50c0b8",
+    "titian":       "#c86030",
+    "schonbrunn":   "#e8b01a",
+    "bordeaux":     "#b03280",
   };
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("opshub.theme") as Theme | null;

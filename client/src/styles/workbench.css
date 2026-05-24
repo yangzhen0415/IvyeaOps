@@ -72,6 +72,117 @@
   --bg-cover:rgba(4,28,28,.80);
 }
 
+/* ── Klein Blue (IKB ultramarine) ── */
+[data-theme=klein]{
+  --bg:rgba(0,6,20,.72);--bg1:rgba(0,10,30,.76);--bg2:rgba(0,16,46,.72);--bg3:rgba(0,22,62,.68);
+  --b:#0c1e44;--b2:#1a306a;--brd:var(--b);
+  --t:#c8d8ff;--t2:#5878c0;--t3:#243a80;
+  --acc:#4d7fff;
+  --blue:#38bdf8;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.52;
+  --warm-glow:rgba(30,60,220,.28);
+  --bg-cover:rgba(0,6,20,.82);
+}
+/* ── Mars Green (military earth) ── */
+[data-theme=mars]{
+  --bg:rgba(8,10,4,.72);--bg1:rgba(12,16,6,.76);--bg2:rgba(18,24,10,.72);--bg3:rgba(25,32,14,.68);
+  --b:#28341a;--b2:#3c4e28;--brd:var(--b);
+  --t:#ced8b8;--t2:#788860;--t3:#3e4e2c;
+  --acc:#8aad3c;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.50;
+  --warm-glow:rgba(100,140,30,.22);
+  --bg-cover:rgba(8,10,4,.82);
+}
+/* ── Hermès Orange ── */
+[data-theme=hermes-orange]{
+  --bg:rgba(14,7,3,.72);--bg1:rgba(22,11,5,.76);--bg2:rgba(30,17,7,.72);--bg3:rgba(40,23,9,.68);
+  --b:#3a1e0c;--b2:#582e14;--brd:var(--b);
+  --t:#ffe4cc;--t2:#9a6e50;--t3:#5a3a28;
+  --acc:#f46020;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.52;
+  --warm-glow:rgba(244,96,32,.32);
+  --bg-cover:rgba(14,7,3,.82);
+}
+/* ── Burgundy Red ── */
+[data-theme=burgundy]{
+  --bg:rgba(12,3,6,.72);--bg1:rgba(20,5,10,.76);--bg2:rgba(30,8,16,.72);--bg3:rgba(40,11,22,.68);
+  --b:#3c1020;--b2:#5a1830;--brd:var(--b);
+  --t:#f2d4dc;--t2:#9a5868;--t3:#5a2c38;
+  --acc:#c03060;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.52;
+  --warm-glow:rgba(180,30,60,.30);
+  --bg-cover:rgba(12,3,6,.82);
+}
+/* ── Mummy Brown (Egyptian amber) ── */
+[data-theme=mummy]{
+  --bg:rgba(14,9,5,.72);--bg1:rgba(22,14,8,.76);--bg2:rgba(32,21,11,.72);--bg3:rgba(42,28,16,.68);
+  --b:#3c2818;--b2:#583e28;--brd:var(--b);
+  --t:#ead8c0;--t2:#9a8060;--t3:#5a4838;
+  --acc:#c87838;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.54;
+  --warm-glow:rgba(180,100,40,.28);
+  --bg-cover:rgba(14,9,5,.82);
+}
+/* ── Prussian Blue ── */
+[data-theme=prussian]{
+  --bg:rgba(0,8,14,.72);--bg1:rgba(0,12,22,.76);--bg2:rgba(2,18,34,.72);--bg3:rgba(4,26,46,.68);
+  --b:#0a2030;--b2:#163048;--brd:var(--b);
+  --t:#c0d8ee;--t2:#4878a0;--t3:#1e4060;
+  --acc:#2d8ab5;
+  --blue:#38bdf8;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.50;
+  --warm-glow:rgba(30,100,160,.22);
+  --bg-cover:rgba(0,8,14,.82);
+}
+/* ── Tiffany Blue ── */
+[data-theme=tiffany]{
+  --bg:rgba(4,14,12,.72);--bg1:rgba(6,20,18,.76);--bg2:rgba(8,28,26,.72);--bg3:rgba(10,38,34,.68);
+  --b:#103028;--b2:#1c4840;--brd:var(--b);
+  --t:#c0eeea;--t2:#489c96;--t3:#1e5852;
+  --acc:#50c0b8;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.46;
+  --warm-glow:rgba(70,190,180,.18);
+  --bg-cover:rgba(4,14,12,.82);
+}
+/* ── Titian Red (venetian gold-red) ── */
+[data-theme=titian]{
+  --bg:rgba(12,7,3,.72);--bg1:rgba(20,12,5,.76);--bg2:rgba(30,18,7,.72);--bg3:rgba(40,25,9,.68);
+  --b:#381808;--b2:#542810;--brd:var(--b);
+  --t:#f0dcc4;--t2:#9a7050;--t3:#5a3c28;
+  --acc:#c86030;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.52;
+  --warm-glow:rgba(200,80,30,.28);
+  --bg-cover:rgba(12,7,3,.82);
+}
+/* ── Schönbrunn Yellow (imperial gold) ── */
+[data-theme=schonbrunn]{
+  --bg:rgba(12,10,3,.72);--bg1:rgba(20,17,4,.76);--bg2:rgba(30,25,6,.72);--bg3:rgba(40,33,8,.68);
+  --b:#383010;--b2:#544818;--brd:var(--b);
+  --t:#f8f0c0;--t2:#9a9050;--t3:#5a5228;
+  --acc:#e8b01a;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.52;
+  --warm-glow:rgba(240,170,20,.30);
+  --bg-cover:rgba(12,10,3,.82);
+}
+/* ── Bordeaux Red (deep wine) ── */
+[data-theme=bordeaux]{
+  --bg:rgba(10,3,8,.72);--bg1:rgba(18,5,14,.76);--bg2:rgba(26,8,22,.72);--bg3:rgba(36,11,30,.68);
+  --b:#320e28;--b2:#4e1840;--brd:var(--b);
+  --t:#f0d0e8;--t2:#9a5890;--t3:#5a2858;
+  --acc:#b03280;
+  --blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;--cyan:#22d3ee;
+  --grain-opacity:.52;
+  --warm-glow:rgba(160,30,110,.26);
+  --bg-cover:rgba(10,3,8,.82);
+}
+
 /* ─────────────────────────────────────────────────────────────────
    GLOBAL BASE — painting faintly visible under theme color overlay
    Layer stack (back → front):
