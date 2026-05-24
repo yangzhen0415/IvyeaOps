@@ -4,19 +4,19 @@ import { api } from "../api/client";
 
 type Props = {
   session: AgentSession;
+  showCli?: boolean;
+  showInherited?: boolean;
 };
 
 // Chat-bubble pane.  Renders user / assistant text turns; collapses noisy
 // cli_frame messages into a "▾ 终端片段" expandable.  Streams the agent's
 // reply via the SSE generator from api/agents.ts.
-export default function ChatPane({ session }: Props) {
+export default function ChatPane({ session, showCli = false, showInherited = false }: Props) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [input, setInput] = useState("");
   const [partial, setPartial] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [showCli, setShowCli] = useState(false);
-  const [showInherited, setShowInherited] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachRef = useRef<HTMLInputElement>(null);
@@ -117,24 +117,6 @@ export default function ChatPane({ session }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      {/* Toolbar */}
-      <div className="pane-bar">
-        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", color: "var(--t3)" }}>
-          <input type="checkbox" checked={showCli} onChange={(e) => setShowCli(e.target.checked)} />
-          终端片段
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", color: "var(--t3)" }}>
-          <input type="checkbox" checked={showInherited} onChange={(e) => setShowInherited(e.target.checked)} />
-          上下文
-        </label>
-        <span className="pb-right">
-          <span style={{ color: "var(--t3)" }}>token≈ {session.token_estimate}</span>
-          <span style={{ color: session.live ? "var(--acc)" : "var(--t3)" }}>
-            {session.live ? "● 在线" : "○ 休眠"}
-          </span>
-        </span>
-      </div>
-
       {/* Scroller */}
       <div ref={scrollerRef} className="chat-body" style={{ display: "flex", flexDirection: "column" }}>
         {visible.length === 0 && !partial && (

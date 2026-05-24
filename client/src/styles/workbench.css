@@ -163,7 +163,7 @@ body::after{
 
 /* --- CONTENT --- */
 .content{flex:1;overflow-y:auto;padding:16px 18px;background:var(--bg)}
-.content:has(.agent-hub),.content-fullpage{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.content:has(.agent-hub),.content-fullpage{padding:8px;overflow:hidden;display:flex;flex-direction:column}
 .content:has(.terminal-workbench-page){padding:8px}
 .content::-webkit-scrollbar{width:3px}
 .content::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
@@ -177,11 +177,15 @@ body::after{
   .g4{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr 1fr}
   .sb{width:0;min-width:0;overflow:hidden;border:none;position:absolute}
+  /* Mobile sidebar is position:fixed z-index:999 (set inline), above the
+     body::after grain layer (z-index:101). Re-apply grain directly on the
+     sidebar so it matches the rest of the UI. */
+  .sb::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:9999;opacity:var(--grain-opacity,.50);mix-blend-mode:color-dodge;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='512' height='512' fill='%23eaeaea' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");background-size:512px 512px}
 }
 @media (max-width: 680px){
   .sb{width:0;min-width:0;overflow:hidden;border:none;position:absolute}
   .content{padding:10px 8px}
-  .content-fullpage{padding:0}
+  .content-fullpage{padding:4px}
   .g2,.g3,.g4{grid-template-columns:1fr}
   .g4{grid-template-columns:1fr 1fr}
   .tabs{overflow-x:auto;white-space:nowrap}
@@ -950,7 +954,7 @@ body::after{
 .ws-main-placeholder{flex:1;padding:24px;overflow:auto}
 
 /* ─── TopBar ─── */
-.ws-topbar{height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid var(--b);background:var(--bg2);flex-shrink:0}
+.ws-topbar{height:36px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid var(--b);background:var(--bg2);flex-shrink:0}
 .ws-topbar-btn{background:transparent;border:1px solid var(--b);color:var(--t2);cursor:pointer;font-size:14px;padding:3px 8px;border-radius:3px;line-height:1}
 .ws-topbar-btn:hover{border-color:var(--acc);color:var(--acc)}
 .ws-crumbs{flex:1;display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;overflow:hidden}
@@ -1159,7 +1163,7 @@ body::after{
   .ws-page.sidebar-open .ws-sidebar-backdrop{display:block}
   /* Suppress the desktop bottom-divider style we set in the previous rule */
   .ws-sidebar{border-bottom:none}
-  .ws-topbar{height:42px}
+  .ws-topbar{height:44px}
   /* Tab bar in main is redundant on mobile; let the bottom nav drive */
   .ws-tabs-bar{display:none}
 
@@ -1191,6 +1195,9 @@ body::after{
 .ws-tab:hover{color:var(--t2)}
 .ws-tab.active{color:var(--acc);border-bottom-color:var(--acc);font-weight:500}
 .ws-tabs-spacer{flex:1}
+.ws-tabs-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t3);flex-shrink:0;padding:0 4px}
+.ws-tabs-meta label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.ws-tabs-meta input[type=checkbox]{accent-color:var(--acc);width:11px;height:11px}
 .ws-tab-body{flex:1;min-height:0;display:flex;flex-direction:column}
 .ws-tab-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;color:var(--t3);font-size:11.5px;text-align:center;line-height:1.7}
 .ws-tab-empty-msg{max-width:480px}
@@ -1627,19 +1634,19 @@ body::after{
 .hide-mobile-picker{display:block}
 
 @media (max-width: 680px) {
-  .market-page{padding:12px 12px;gap:10px}
-  .market-header{gap:8px}
-  .market-title{font-size:14px}
-  .market-mode-btn{padding:6px 16px;font-size:12px}
+  .market-page{padding:0;gap:8px}
+  .market-header{gap:6px}
+  .market-title{font-size:12px}
+  .market-mode-btn{padding:4px 10px;font-size:11px}
 
-  /* Input row: query takes full width, picker+submit on second line */
-  .market-input-row{flex-wrap:wrap;gap:8px}
-  .market-query-input{flex:1 1 100%;font-size:14px;padding:11px 12px;border-radius:8px}
-  .market-mkt-wrap{flex:1}
-  .market-mkt-btn{width:100%;justify-content:center;padding:11px 12px;border-radius:8px;font-size:13px}
-  .market-mkt-flag{font-size:17px}
-  .market-mkt-code{font-size:13px}
-  .market-btn{flex:1;padding:11px 12px;font-size:13px;border-radius:8px}
+  /* Input row: single row, compact */
+  .market-input-row{flex-wrap:nowrap;gap:6px;padding:6px 8px}
+  .market-query-input{flex:1;font-size:13px;padding:7px 10px;border-radius:5px}
+  .market-mkt-wrap{flex:0 0 auto}
+  .market-mkt-btn{width:auto;padding:7px 8px;border-radius:5px;font-size:12px}
+  .market-mkt-flag{font-size:14px}
+  .market-mkt-code{font-size:12px}
+  .market-btn{padding:7px 12px;font-size:12px;border-radius:5px}
 
   /* Hide desktop dropdown, show bottom sheet */
   .hide-mobile-picker{display:none !important}
@@ -1662,9 +1669,11 @@ body::after{
 
   .market-progress-label{font-size:10px}
   .market-report-body{padding:12px 14px;font-size:12px;border-radius:6px}
-  .market-empty-icon{font-size:32px}
+  .market-empty{justify-content:flex-start;padding-top:28px;gap:8px}
+  .market-empty-icon{font-size:26px;margin-bottom:0}
   .market-empty-title{font-size:12px}
-  .market-example-chip{font-size:12px;padding:7px 14px}
+  .market-example-chip{font-size:11px;padding:5px 12px}
+  .market-empty-hint{font-size:10px;margin-top:0}
   .market-live-badge{margin-left:0}
   .market-report-meta{max-width:50%}
 }
