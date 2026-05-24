@@ -298,3 +298,44 @@ async def market_research(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Pulse endpoint (lightweight: keyword_detail + keyword_trend only) ─────────
+
+class PulseReq(BaseModel):
+    keyword: str
+    marketplace: str = "US"
+
+
+@router.post("/pulse")
+async def market_pulse(req: PulseReq, _user: str = Depends(require_user)) -> dict:
+    """Fetch keyword_detail + keyword_trend for a single keyword.
+    Returns a flat dict with the key metrics — fast (~2-4s, 2 concurrent calls).
+    """
+    if not req.keyword.strip():
+        raise HTTPException(400, "keyword cannot be empty")
+
+    from app.services.sorftime_service import _make_client, _safe_call
+    import asyncio
+
+    async with _make_client() as client:
+        detail_task = _safe_call(
+            client, "keyword_detail",
+            {"keyword": req.keyword, "keywordSupportSite": req.marketplace}, 1,
+        )
+        trend_task = _safe_call(
+            client, "keyword_trend",
+            {"keyword": req.keyword, "keywordSupportSite": req.marketplace}, 2,
+        )
+        (_, detail, detail_err), (_, trend, trend_err) = await asyncio.gather(
+            detail_task, trend_task
+        )
+
+    return {
+        "keyword": req.keyword,
+        "marketplace": req.marketplace,
+        "detail": detail,
+        "detail_error": detail_err,
+        "trend": trend,
+        "trend_error": trend_err,
+    }

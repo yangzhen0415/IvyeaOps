@@ -90,3 +90,23 @@ export function streamResearch(
     }
   });
 }
+
+export interface PulseResult {
+  keyword: string;
+  marketplace: string;
+  detail: Record<string, any> | null;
+  detail_error: string | null;
+  trend: Record<string, any> | null;
+  trend_error: string | null;
+}
+
+export async function fetchPulse(keyword: string, marketplace: string): Promise<PulseResult> {
+  const r = await fetch("/api/market/pulse", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword, marketplace }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
