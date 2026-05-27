@@ -12,12 +12,12 @@ workspace, all behind a single login.
 
 | Module | Description |
 |---|---|
-| 🤖 **AI Agent Workspace** | Chat with hermes / codex / claude from the browser; session history, file manager, shell |
+| 🤖 **AI Agent Workspace** | Chat with hermes / codex from the browser; session history, file manager, shell |
 | 🔍 **Market Research** | Sorftime market data + AI synthesis for ASIN and keyword analysis |
 | 📣 **Ad Audit** | Automated advertising report analysis via AI |
 | 🖼 **Listing Generator** | Product images (Apimart `gpt-image-2`) + AI-written copy |
 | 🧠 **Knowledge Base** | Local GBrain Markdown notes with semantic search |
-| 📊 **Token Monitor** | Usage tracking across hermes / codex / claude sessions |
+| 📊 **Token Monitor** | Usage tracking across hermes / codex sessions |
 | 📰 **AI News Digest** | Daily summarised AI industry news |
 | 💻 **Multi-Terminal** | Browser-based PTY sessions (Linux only) |
 | ⚙️ **System Settings** | Guided first-run wizard + centralized config UI |
@@ -96,8 +96,8 @@ On the first login (before any password has been set), ops-hub shows a
 guided setup wizard:
 
 1. **Welcome** — overview of features
-2. **Agent Detection** — scans for hermes / codex / claude; offers one-click
-   install for codex and claude via npm
+2. **Agent Detection** — scans for hermes / codex; offers one-click
+   install for codex via npm
 3. **API Keys** — Apimart key (image generation) and optional Sorftime key
 4. **Done** — enter the workbench
 
@@ -113,7 +113,6 @@ ops-hub supports three local Agent CLIs. Install at least one:
 |---|---|---|
 | **hermes** | See hermes project docs | Recommended — includes MCP, Feishu relay |
 | **codex** | `npm install -g @openai/codex` | OpenAI Codex CLI |
-| **claude** | `npm install -g @anthropic-ai/claude-code` | Anthropic Claude Code |
 
 Once installed, ops-hub auto-detects them from `$PATH` — no manual path config
 needed in most cases.

@@ -200,7 +200,7 @@ export default function ServerMonitor() {
         className="ptitle"
         style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
       >
-        <span>/ 服务器监控 · 170.106.83.241</span>
+        <span>/ 服务器监控 · localhost</span>
         <span style={{ fontSize: 9, color: "var(--t3)", textTransform: "none" }}>
           ● live · 3s
         </span>

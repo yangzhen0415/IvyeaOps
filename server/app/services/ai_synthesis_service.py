@@ -68,19 +68,39 @@ def _deepseek_key() -> str:
 _VALID_TEXT_PROVIDERS = ("hermes", "codex", "claude", "apimart", "deepseek")
 
 
+# Providers safe for non-admin users: pure HTTP APIs, no local CLI / shell / MCP.
+_HTTP_ONLY_PROVIDERS = ("deepseek", "apimart")
+
+
 def _text_provider_chain() -> list[str]:
     """Parse the comma-separated text_ai_providers setting and filter to
-    known names. Empty / malformed config falls back to deepseek-first order."""
+    known names. Empty / malformed config falls back to deepseek-first order.
+
+    SECURITY: for non-admin users, the chain is forced to HTTP-only providers
+    (deepseek / apimart) so a user request can NEVER spawn a local CLI agent
+    (hermes/codex/claude) with shell / MCP / filesystem access."""
     from app.core import hub_settings
     raw = str(hub_settings.get("text_ai_providers") or "").strip()
     if not raw:
-        return ["deepseek", "hermes", "codex", "claude"]
-    out: list[str] = []
-    for p in raw.split(","):
-        p = p.strip().lower()
-        if p in _VALID_TEXT_PROVIDERS and p not in out:
-            out.append(p)
-    return out or ["deepseek", "hermes", "codex", "claude"]
+        chain = ["deepseek", "hermes", "codex", "claude"]
+    else:
+        out: list[str] = []
+        for p in raw.split(","):
+            p = p.strip().lower()
+            if p in _VALID_TEXT_PROVIDERS and p not in out:
+                out.append(p)
+        chain = out or ["deepseek", "hermes", "codex", "claude"]
+
+    # Non-admin (and only when a request context is set) → HTTP-only.
+    try:
+        from app.core.security import current_user
+        cu = current_user.get()
+        if cu is not None and cu.get("role") != "admin":
+            http = [p for p in chain if p in _HTTP_ONLY_PROVIDERS]
+            return http or ["deepseek", "apimart"]
+    except Exception:
+        pass
+    return chain
 
 _ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -16,18 +16,34 @@ import Terminal from "./pages/workbench/Terminal";
 import ServerMonitor from "./pages/workbench/ServerMonitor";
 import News from "./pages/workbench/News";
 import Brain from "./pages/workbench/Brain";
-import ImageWorkflow from "./pages/workbench/ImageWorkflow";
-import ListingGenerator from "./pages/workbench/ListingGenerator.jsx";
+import ListingWorkbench from "./pages/workbench/ListingWorkbench";
 import AgentChat from "./pages/workbench/AgentChat";
 import Workspace from "./pages/workbench/workspace/Workspace";
 import Market from "./pages/workbench/Market";
+import Playbook from "./pages/workbench/Playbook";
 import HubSettings from "./pages/workbench/HubSettings";
 import Setup from "./pages/Setup";
+import FreightQuote from "./pages/workbench/FreightQuote";
+import Users from "./pages/workbench/Users";
+import Assistant from "./pages/workbench/Assistant";
+import ImageGen from "./pages/workbench/ImageGen";
+import IdeaSkill from "./pages/workbench/IdeaSkill";
+import SkillTools from "./pages/workbench/SkillTools";
+import SkillHub from "./pages/workbench/SkillHub";
+import DeepAnalysis from "./pages/workbench/DeepAnalysis";
 import { me } from "./api/client";
 import { getSetupStatus, type SetupChecks } from "./api/setup";
 
 // ---------------------------------------------------------------------------
-// Auth guard — also checks whether the first-run wizard is needed.
+// Auth context — exposes the current user's role to all pages / the layout.
+// ---------------------------------------------------------------------------
+
+export type Role = "admin" | "user";
+const AuthCtx = createContext<{ role: Role; username: string }>({ role: "user", username: "" });
+export const useAuth = () => useContext(AuthCtx);
+
+// ---------------------------------------------------------------------------
+// Auth guard — also checks whether the first-run wizard is needed (admin only).
 // ---------------------------------------------------------------------------
 
 type AuthState = "loading" | "setup" | "ok" | "no";
@@ -35,10 +51,17 @@ type AuthState = "loading" | "setup" | "ok" | "no";
 function RequireAuth({ children }: { children: JSX.Element }) {
   const [state, setState] = useState<AuthState>("loading");
   const [setupChecks, setSetupChecks] = useState<SetupChecks | null>(null);
+  const [auth, setAuth] = useState<{ role: Role; username: string }>({ role: "user", username: "" });
 
   useEffect(() => {
     me()
-      .then(async () => {
+      .then(async (u) => {
+        setAuth({ role: u.role, username: u.username });
+        // First-run wizard is admin-only; registered users skip it.
+        if (u.role !== "admin") {
+          setState("ok");
+          return;
+        }
         try {
           const s = await getSetupStatus();
           if (s.needs_setup) {
@@ -48,7 +71,6 @@ function RequireAuth({ children }: { children: JSX.Element }) {
             setState("ok");
           }
         } catch {
-          // If setup endpoint fails (older deploy without the route), just proceed.
           setState("ok");
         }
       })
@@ -77,7 +99,7 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   }
   if (state === "no") return <Navigate to="/login" replace />;
   if (state === "setup" && setupChecks) return <Setup checks={setupChecks} />;
-  return children;
+  return <AuthCtx.Provider value={auth}>{children}</AuthCtx.Provider>;
 }
 
 export default function App() {
@@ -113,8 +135,17 @@ export default function App() {
                 /agents-legacy and AgentChat.tsx can be deleted. */}
             <Route path="agents" element={<Workspace />} />
             <Route path="agents-legacy" element={<AgentChat />} />
-            <Route path="imgflow" element={<ListingGenerator />} />
+            <Route path="listing" element={<ListingWorkbench />} />
+            <Route path="freight" element={<FreightQuote />} />
             <Route path="market" element={<Market />} />
+            <Route path="playbook" element={<Playbook />} />
+            <Route path="users" element={<Users />} />
+            <Route path="assistant" element={<Assistant />} />
+            <Route path="imagegen" element={<ImageGen />} />
+            <Route path="idea-skill" element={<IdeaSkill />} />
+            <Route path="skill-tools" element={<SkillTools />} />
+            <Route path="skill-hub" element={<SkillHub />} />
+            <Route path="deep-analysis" element={<DeepAnalysis />} />
             <Route path="hub-settings" element={<HubSettings />} />
             <Route path="*" element={<NotFound />} />
           </Route>

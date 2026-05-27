@@ -1,0 +1,147 @@
+import { useCallback, useRef, useState } from "react";
+import { streamListingRewrite, type SseEvent } from "../../../api/deepAnalysis";
+
+const MARKETPLACES = ["US", "UK", "DE", "CA", "JP"];
+const FIELD_OPTIONS = [
+  { value: "title", label: "标题" },
+  { value: "bullets", label: "五点" },
+  { value: "description", label: "描述" },
+  { value: "qa", label: "QA" },
+];
+
+export default function ListingRewrite() {
+  const [asinsText, setAsinsText] = useState("");
+  const [marketplace, setMarketplace] = useState("US");
+  const [fields, setFields] = useState<string[]>(["title", "bullets"]);
+  const [style, setStyle] = useState("professional");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [output, setOutput] = useState("");
+  const [provider, setProvider] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  const toggleField = (fv: string) => {
+    setFields((prev) => (prev.includes(fv) ? prev.filter((f) => f !== fv) : [...prev, fv]));
+  };
+
+  const run = useCallback(async () => {
+    const asins = asinsText
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!asins.length || loading) return;
+    setLoading(true);
+    setError("");
+    setOutput("");
+    setProvider("");
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      await streamListingRewrite(
+        { asins, marketplace, fields, style },
+        (evt: SseEvent) => {
+          if (evt.type === "token") {
+            setOutput((prev) => prev + evt.text);
+            setProvider(evt.provider);
+          } else if (evt.type === "error") {
+            setError(evt.detail);
+          }
+        },
+        ctrl.signal,
+      );
+    } catch (e: any) {
+      if (e.name !== "AbortError") setError(e?.message || "请求失败");
+    } finally {
+      setLoading(false);
+      abortRef.current = null;
+    }
+  }, [asinsText, marketplace, fields, style, loading]);
+
+  return (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>⊡ Listing 批量改写</div>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <textarea
+          className="market-query-input"
+          value={asinsText}
+          onChange={(e) => setAsinsText(e.target.value)}
+          placeholder="输入 ASIN（每行一个或逗号分隔）"
+          disabled={loading}
+          rows={3}
+          style={{ flex: "1 1 240px", resize: "vertical", fontFamily: "inherit" }}
+        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "0 0 auto" }}>
+          <select className="market-query-input" style={{ width: 100 }} value={marketplace} onChange={(e) => setMarketplace(e.target.value)}>
+            {MARKETPLACES.map((m) => <option key={m}>{m}</option>)}
+          </select>
+          <select className="market-query-input" style={{ width: 100 }} value={style} onChange={(e) => setStyle(e.target.value)}>
+            <option value="professional">专业</option>
+            <option value="casual">轻松</option>
+            <option value="luxury">奢华</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        {FIELD_OPTIONS.map((f) => (
+          <button
+            key={f.value}
+            className="tbtn"
+            onClick={() => toggleField(f.value)}
+            style={{
+              fontSize: 10,
+              background: fields.includes(f.value) ? "var(--green)" : undefined,
+              color: fields.includes(f.value) ? "#fff" : undefined,
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button className="market-btn market-btn-submit" onClick={run} disabled={loading || !asinsText.trim()}>
+          {loading ? "改写中…" : "开始改写"}
+        </button>
+        {loading && (
+          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: 10 }}>
+            停止
+          </button>
+        )}
+      </div>
+
+      {error && <div className="market-error" style={{ marginTop: 10 }}>{error}</div>}
+      {loading && !output && (
+        <div className="pulse-loading" style={{ marginTop: 10 }}>
+          <span className="pulse-spin">◌</span> 正在改写 Listing（约 1-2 分钟）…
+        </div>
+      )}
+
+      {output && (
+        <div style={{ marginTop: 14 }}>
+          {provider && <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 4 }}>via {provider}</div>}
+          <div
+            className="card"
+            style={{ background: "var(--bg2)", fontSize: 11, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
+            dangerouslySetInnerHTML={{ __html: simpleMarkdown(output) }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function simpleMarkdown(md: string): string {
+  return md
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/^### (.+)$/gm, '<div style="font-size:13px;font-weight:700;margin:10px 0 4px">$1</div>')
+    .replace(/^## (.+)$/gm, '<div style="font-size:14px;font-weight:700;margin:12px 0 6px">$1</div>')
+    .replace(/^# (.+)$/gm, '<div style="font-size:15px;font-weight:700;margin:14px 0 8px">$1</div>')
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, '<code style="background:var(--bg3);padding:1px 4px;border-radius:2px;font-size:10px">$1</code>')
+    .replace(/\n/g, "<br>");
+}

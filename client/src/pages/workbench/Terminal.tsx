@@ -111,21 +111,20 @@ function SnapshotPanel({ visible, adapter, refreshKey }: {
       const data = await adapter.list();
       setItems(data.items);
       setTotal(data.total);
-      // Selection logic: stay on the same row if it still exists, otherwise
-      // default to the newest (snap_curr, which is items[0] by API order).
-      const stillExists = data.items.some((s) => s.id === selectedId);
-      if (!stillExists) {
-        const first = data.items[0];
-        setSelectedId(first ? first.id : null);
-      }
+      // Use functional update so we always read the latest selectedId, not a
+      // stale closure value from when the polling interval was created.
+      setSelectedId((prev) => {
+        if (prev === null) return data.items[0]?.id ?? null;  // first load
+        const stillExists = data.items.some((s) => s.id === prev);
+        return stillExists ? prev : (data.items[0]?.id ?? null);
+      });
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || "加载快照列表失败");
       setTimeout(() => setMsg(""), 3000);
     } finally {
       setListLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adapter, selectedId]);
+  }, [adapter]);
 
   const handleClear = async () => {
     if (!confirm("确定清空全部 3 张快照（当前 / 上一个 / 之前）？此操作不可撤销。")) return;

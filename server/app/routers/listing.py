@@ -171,17 +171,57 @@ def delete_project(project_id: str, _user: str = Depends(require_user)):
 @router.post("/projects/{project_id}/scrape")
 async def scrape(project_id: str, _user: str = Depends(require_user)):
     conn = _db()
-    row = conn.execute("SELECT imgflow_project_id FROM listing_projects WHERE id = ?", (project_id,)).fetchone()
+    row = conn.execute("SELECT asin, marketplace, imgflow_project_id FROM listing_projects WHERE id = ?", (project_id,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(404)
+    asin = row["asin"]
+    marketplace = row["marketplace"] or "US"
     imgflow_id = row["imgflow_project_id"]
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(f"{_imgflow_base()}/scrape/{imgflow_id}")
-        if resp.status_code != 200:
-            raise HTTPException(502, f"scrape failed: {resp.text}")
-        data = resp.json()
+    data = {}
+
+    # 1) Try imgflow scrape
+    if imgflow_id:
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(f"{_imgflow_base()}/scrape/{imgflow_id}")
+                if resp.status_code == 200:
+                    data = resp.json()
+        except Exception:
+            pass
+
+    # 2) If imgflow returned empty data, fall back to sorftime product_detail
+    has_title = bool(data.get("title"))
+    has_bullets = bool(data.get("bullets"))
+    if not has_title and not has_bullets:
+        try:
+            from app.services import sorftime_service
+            import re as _re
+            async with sorftime_service._make_client() as client:
+                _, raw, err = await sorftime_service._safe_call(
+                    client, "product_detail",
+                    {"asin": asin, "amzSite": marketplace}, 1,
+                )
+                if raw and not err and isinstance(raw, str):
+                    # Parse structured text: "标题：xxx\n主图：xxx\n产品描述：xxx"
+                    title_m = _re.search(r'标题[：:]\s*(.+)', raw)
+                    if title_m:
+                        data["title"] = title_m.group(1).strip()
+                    img_m = _re.search(r'主图[：:]\s*(https?://\S+)', raw)
+                    if img_m:
+                        data["imageUrls"] = [img_m.group(1).strip()]
+                    desc_m = _re.search(r'产品描述[：:]\s*(.+?)(?:\r?\n\r?\n|\r?\n[^\u4e00-\u9fff])', raw, _re.DOTALL)
+                    if desc_m:
+                        desc_text = desc_m.group(1).strip()
+                        # Split by <br> or newlines into bullets
+                        parts = _re.split(r'<br>|\n', desc_text)
+                        parts = [p.strip() for p in parts if p.strip()]
+                        if parts:
+                            data["bullets"] = parts[:5]
+                            data["description"] = desc_text
+        except Exception:
+            pass
 
     # Extract image URLs as reference images
     image_urls = data.get("imageUrls") or data.get("images") or []
@@ -286,10 +326,42 @@ def get_reference_images(project_id: str, _user: str = Depends(require_user)):
     if not row:
         raise HTTPException(404)
     data = json.loads(row["scrape_data"]) if row["scrape_data"] else {}
+    # Return uploaded images as serving URLs (not raw file paths)
+    uploaded_paths = data.get("uploaded_images", [])
+    uploaded_urls = []
+    for p in uploaded_paths:
+        path_obj = Path(p)
+        if path_obj.exists():
+            uploaded_urls.append({
+                "filename": path_obj.name,
+                "url": f"/api/listing/images/{project_id}/{path_obj.name}",
+            })
     return {
         "scraped": data.get("reference_images", []),
-        "uploaded": data.get("uploaded_images", []),
+        "uploaded": uploaded_urls,
     }
+
+
+@router.delete("/projects/{project_id}/uploaded-image/{filename}")
+def delete_uploaded_image(project_id: str, filename: str, _user: str = Depends(require_user)):
+    """Delete an uploaded reference image."""
+    path = IMAGES_DIR / project_id / filename
+    if path.exists():
+        path.unlink()
+    # Remove from scrape_data
+    conn = _db()
+    row = conn.execute("SELECT scrape_data FROM listing_projects WHERE id = ?", (project_id,)).fetchone()
+    if row:
+        data = json.loads(row["scrape_data"]) if row["scrape_data"] else {}
+        uploaded = [p for p in data.get("uploaded_images", []) if not p.endswith(f"/{filename}")]
+        data["uploaded_images"] = uploaded
+        conn.execute(
+            "UPDATE listing_projects SET scrape_data=?, updated_at=? WHERE id=?",
+            (json.dumps(data, ensure_ascii=False), time.time(), project_id),
+        )
+        conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 # ─── AI Provider Fallback Chain ───────────────────────────────────────────────
@@ -1490,11 +1562,26 @@ async def generate_single_image(project_id: str, body: ImageGenReq, _user: str =
     if not row:
         raise HTTPException(404)
 
-    # Get reference image URLs to pass as image_urls parameter
+    # Build reference image list: uploaded files (base64) take priority over scraped URLs
     ref_urls = body.reference_urls
     if not ref_urls:
+        import base64 as _b64
+        import mimetypes as _mt
         scrape_data = json.loads(row["scrape_data"]) if row["scrape_data"] else {}
-        ref_urls = (scrape_data.get("reference_images") or scrape_data.get("imageUrls") or [])[:2]
+        scraped_urls = (scrape_data.get("reference_images") or scrape_data.get("imageUrls") or [])[:2]
+        uploaded_paths = scrape_data.get("uploaded_images", [])
+        b64_refs: list[str] = []
+        for p in uploaded_paths[:4]:
+            p_obj = Path(p)
+            if p_obj.exists():
+                try:
+                    raw = p_obj.read_bytes()
+                    mime = _mt.guess_type(str(p_obj))[0] or "image/jpeg"
+                    b64_refs.append(f"data:{mime};base64,{_b64.b64encode(raw).decode()}")
+                except Exception:
+                    pass
+        # Uploaded images first (user's own product photos), then scraped
+        ref_urls = (b64_refs + list(scraped_urls))[:4]
 
     if not _apimart_key():
         raise HTTPException(
@@ -1790,5 +1877,484 @@ def _build_product_context(row, scrape_data: dict, analysis_data: dict) -> str:
                 parts.append(f"USP (imgflow): {imgf['uspExtraction'][:300]}")
             if imgf.get("sorftimeData"):
                 parts.append(f"Sorftime Trends: {str(imgf['sorftimeData'])[:200]}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEW-PRODUCT LISTING COPY GENERATOR
+# Job-based workflow: images → vision analysis → competitor data → LLM copy
+# ═══════════════════════════════════════════════════════════════════════════════
+
+COPY_JOB_DB = settings.data_dir / "listing_copy_jobs.sqlite3"
+COPY_IMAGES_DIR = settings.data_dir / "listing_copy_images"
+COPY_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+_LISTING_RULES_FILE = Path(__file__).resolve().parents[2] / "app" / "services" / "amazon_listing_rules.md"
+
+_AMAZON_LISTING_RULES = """# Amazon Listing Generation Rules
+
+## Output Goal
+The final deliverable must include:
+- 1 generation plan/rationale
+- 5 compliant Amazon titles
+- 2 bullet point sets, each with exactly 5 bullet points
+- 2 backend search term strings
+- A compliance checklist
+
+## Title Rules
+- Generate exactly 5 title options.
+- Target the marketplace language. For US, write titles in English.
+- Mobile Optimization: Front-load the product type and 1-2 primary keywords within the first 80 characters.
+- Length: Keep titles concise. Prefer 120-180 characters. Do not exceed 200 characters.
+- Use title case. Do not use ALL CAPS.
+- Forbidden Words: "Gift", "Free", "Bonus", "Warranty", "Hot Item", "Best Seller", "No.1", price/delivery promises.
+- Do not include unsupported claims, medical claims, or subjective claims such as "best" or "top-rated".
+- Include the product type, most important buyer intent, and differentiating feature naturally.
+
+## Bullet Point Rules
+- Generate exactly 2 bullet point sets.
+- Set A (Conversion Focus): Focus on emotional benefits, usage scenarios, and persuasion. Use [Bold Header] for each bullet.
+- Set B (Rufus/QA Focus): Focus on factual specifications, technical details, and answering shopper questions.
+- Each set must contain exactly 5 bullets.
+- Cover material/structure, core function, usage scenario, gift/audience fit, and risk-reducing details.
+- Explicit Attributes: State key attributes in "[Attribute]: [Detail]" format.
+- Avoid prohibited terms: medical claims, guaranteed outcomes, competitor attacks, prices, promotions, URLs.
+
+## Search Term Rules
+- Generate exactly 2 backend search term strings.
+- Length Limit: Each string MUST be under 249 bytes. Use lowercase, space-separated terms. No commas.
+- Do not repeat keywords already in the title. Prefer synonyms, spelling variants, use cases, long-tail terms.
+
+## Output Format (JSON)
+Return a JSON object with these fields:
+{
+  "rationale": "Strategy explanation",
+  "titles": ["Title 1", "Title 2", "Title 3", "Title 4", "Title 5"],
+  "bullets_a": ["Bullet 1", "Bullet 2", "Bullet 3", "Bullet 4", "Bullet 5"],
+  "bullets_b": ["Bullet 1", "Bullet 2", "Bullet 3", "Bullet 4", "Bullet 5"],
+  "search_terms": ["string 1 under 249 chars", "string 2 under 249 chars"],
+  "compliance_notes": ["any compliance issues or notes"]
+}"""
+
+
+def _copy_job_db():
+    conn = sqlite3.connect(str(COPY_JOB_DB))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""CREATE TABLE IF NOT EXISTS copy_jobs (
+        id TEXT PRIMARY KEY,
+        status TEXT DEFAULT 'pending',
+        stage INTEGER DEFAULT 0,
+        stage_msg TEXT DEFAULT '',
+        marketplace TEXT DEFAULT 'US',
+        product_type TEXT DEFAULT '',
+        asins TEXT DEFAULT '[]',
+        product_notes TEXT DEFAULT '',
+        image_paths TEXT DEFAULT '[]',
+        vision_result TEXT,
+        competitor_result TEXT,
+        result TEXT,
+        error TEXT,
+        created_at REAL,
+        updated_at REAL
+    )""")
+    conn.commit()
+    return conn
+
+
+_copy_job_db().close()
+
+
+class CopyJobReq(BaseModel):
+    marketplace: str = "US"
+    product_type: str
+    asins: list[str] = []
+    product_notes: str = ""
+
+
+async def _analyze_images_vision(image_paths: list[str], product_type: str) -> dict:
+    """Call vision API to analyze product images. Falls back gracefully."""
+    from app.services.ai_synthesis_service import _apimart_key, _apimart_base
+    import base64, httpx as hx
+
+    if not image_paths:
+        return {"mode": "skipped", "features": [], "reason": "No images provided"}
+
+    key = _apimart_key()
+    if not key:
+        return {"mode": "skipped", "features": [], "reason": "No vision API configured"}
+
+    # Build vision messages
+    content: list[dict] = [
+        {"type": "text", "text": (
+            f"You are analyzing product images for an Amazon listing. "
+            f"Product type: {product_type}. "
+            f"Extract: materials, key features, dimensions/size cues, accessories included, "
+            f"color options, usage scenarios visible in images. "
+            f"Be specific and factual. Do not invent features not visible. "
+            f"Return JSON: {{\"features\": [\"feature1\", ...], \"materials\": \"...\", "
+            f"\"size_hints\": \"...\", \"accessories\": \"...\", \"scenarios\": [\"...\"]}}"
+        )}
+    ]
+    for ip in image_paths[:6]:  # max 6 images for cost
+        try:
+            with open(ip, "rb") as f:
+                data = base64.b64encode(f.read()).decode()
+            ext = Path(ip).suffix.lower().lstrip(".")
+            mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                    "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/jpeg")
+            content.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}})
+        except Exception:
+            pass
+
+    if len(content) == 1:
+        return {"mode": "skipped", "features": [], "reason": "Could not read image files"}
+
+    try:
+        async with hx.AsyncClient(timeout=hx.Timeout(60, connect=10)) as client:
+            resp = await asyncio.wait_for(
+                client.post(
+                    f"{_apimart_base()}/messages",
+                    json={
+                        "model": "claude-sonnet-4-6",
+                        "max_tokens": 1000,
+                        "messages": [{"role": "user", "content": content}],
+                    },
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json",
+                        "anthropic-version": "2023-06-01",
+                    },
+                ),
+                timeout=65,
+            )
+        if resp.status_code == 200:
+            body = resp.json()
+            text = ""
+            for block in body.get("content", []):
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text += block.get("text", "")
+            # Try to parse JSON
+            import re as _re
+            m = _re.search(r"\{[\s\S]*\}", text)
+            if m:
+                try:
+                    parsed = json.loads(m.group(0))
+                    parsed["mode"] = "vision"
+                    return parsed
+                except Exception:
+                    pass
+            return {"mode": "vision", "features": [text[:500]], "raw": text}
+    except Exception as exc:
+        return {"mode": "error", "features": [], "reason": str(exc)}
+
+    return {"mode": "skipped", "features": [], "reason": "Vision call failed"}
+
+
+async def _fetch_competitor_data(asins: list[str], marketplace: str) -> dict:
+    """Fetch competitor product/keyword data via sorftime. Fails gracefully."""
+    from app.services.sorftime_service import _make_client, _safe_call
+    results = {}
+    errors = []
+    try:
+        async with _make_client() as client:
+            tasks = []
+            for i, asin in enumerate(asins[:5]):
+                tasks.append(_safe_call(client, "product_report", {"asin": asin, "amzSite": marketplace}, i + 1))
+                tasks.append(_safe_call(client, "competitor_product_keywords",
+                                        {"asin": asin, "keywordSupportSite": marketplace}, i + 10))
+            gathered = await asyncio.gather(*tasks)
+            for name, val, err in gathered:
+                if err:
+                    errors.append(err)
+                elif val:
+                    asin_key = name
+                    if asin_key not in results:
+                        results[asin_key] = []
+                    results[asin_key].append(val)
+    except Exception as exc:
+        errors.append(str(exc))
+    return {"data": results, "errors": errors, "available": bool(results)}
+
+
+def _build_listing_prompt(
+    marketplace: str,
+    product_type: str,
+    product_notes: str,
+    vision_result: dict,
+    competitor_result: dict,
+) -> str:
+    parts = [
+        f"You are an Amazon listing copywriting expert.",
+        f"Marketplace: {marketplace}",
+        f"Product Type: {product_type}",
+        "",
+    ]
+
+    if product_notes:
+        parts.append(f"Seller Notes (product specs/features):\n{product_notes}")
+        parts.append("")
+
+    if vision_result.get("mode") == "vision":
+        features = vision_result.get("features", [])
+        if features:
+            parts.append(f"Image Analysis - Observed Features:\n" + "\n".join(f"- {f}" for f in features[:20]))
+        materials = vision_result.get("materials", "")
+        if materials:
+            parts.append(f"Materials: {materials}")
+        scenarios = vision_result.get("scenarios", [])
+        if scenarios:
+            parts.append(f"Visible Use Scenarios: {', '.join(scenarios[:5])}")
+        parts.append("")
+
+    if competitor_result.get("available"):
+        comp_data = competitor_result.get("data", {})
+        parts.append("Competitor Data (from market research):")
+        parts.append(json.dumps(comp_data, ensure_ascii=False)[:3000])
+        parts.append("")
+
+    parts.append(_AMAZON_LISTING_RULES)
+    parts.append("")
+    parts.append("Now generate the listing copy. Return ONLY valid JSON, no other text.")
+
+    return "\n".join(parts)
+
+
+async def _run_copy_job(job_id: str) -> None:
+    """Background task: vision → competitor → LLM → save result."""
+    import httpx as hx
+
+    def update(stage: int, msg: str, **kwargs):
+        conn = _copy_job_db()
+        conn.execute(
+            "UPDATE copy_jobs SET stage=?, stage_msg=?, updated_at=?, status=? WHERE id=?",
+            (stage, msg, time.time(), kwargs.get("status", "running"), job_id),
+        )
+        conn.commit()
+        conn.close()
+
+    try:
+        conn = _copy_job_db()
+        row = dict(conn.execute("SELECT * FROM copy_jobs WHERE id=?", (job_id,)).fetchone())
+        conn.close()
+
+        image_paths = json.loads(row.get("image_paths", "[]"))
+        asins = json.loads(row.get("asins", "[]"))
+        marketplace = row.get("marketplace", "US")
+        product_type = row.get("product_type", "")
+        product_notes = row.get("product_notes", "")
+
+        # Stage 0: Vision
+        update(0, "正在分析产品图片…" if image_paths else "未上传图片，跳过图片识别")
+        vision_result = await _analyze_images_vision(image_paths, product_type)
+
+        conn = _copy_job_db()
+        conn.execute("UPDATE copy_jobs SET vision_result=? WHERE id=?",
+                     (json.dumps(vision_result, ensure_ascii=False), job_id))
+        conn.commit()
+        conn.close()
+
+        # Stage 1: Competitor data
+        update(1, "正在查询竞品数据…" if asins else "未填写竞品ASIN，跳过竞品查询")
+        competitor_result = await _fetch_competitor_data(asins, marketplace) if asins else {
+            "data": {}, "errors": [], "available": False
+        }
+
+        conn = _copy_job_db()
+        conn.execute("UPDATE copy_jobs SET competitor_result=? WHERE id=?",
+                     (json.dumps(competitor_result, ensure_ascii=False), job_id))
+        conn.commit()
+        conn.close()
+
+        # Stage 2: LLM generation
+        update(2, "正在生成文案…")
+        prompt = _build_listing_prompt(marketplace, product_type, product_notes, vision_result, competitor_result)
+
+        # Try DeepSeek first, then apimart
+        from app.services.ai_synthesis_service import (
+            _deepseek_key, _apimart_key, _apimart_base, _stream_openai_compat
+        )
+        result_text = ""
+
+        dk = _deepseek_key()
+        if dk:
+            try:
+                async for chunk in _stream_openai_compat(dk, "https://api.deepseek.com", "deepseek-chat", prompt):
+                    result_text += chunk
+            except Exception:
+                result_text = ""
+
+        if not result_text:
+            ak = _apimart_key()
+            if ak:
+                try:
+                    async with hx.AsyncClient(timeout=hx.Timeout(120, connect=10)) as client:
+                        resp = await client.post(
+                            f"{_apimart_base()}/messages",
+                            json={"model": "claude-sonnet-4-6", "max_tokens": 4096,
+                                  "messages": [{"role": "user", "content": prompt}]},
+                            headers={"Authorization": f"Bearer {ak}", "Content-Type": "application/json",
+                                     "anthropic-version": "2023-06-01"},
+                        )
+                        resp.raise_for_status()
+                        body = resp.json()
+                        for block in body.get("content", []):
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                result_text += block.get("text", "")
+                except Exception:
+                    pass
+
+        if not result_text:
+            raise RuntimeError("所有AI提供商均不可用，请在系统配置中设置 deepseek_api_key 或 apimart_key")
+
+        # Parse JSON from result
+        import re as _re
+        parsed_result = None
+        m = _re.search(r"\{[\s\S]*\}", result_text)
+        if m:
+            try:
+                parsed_result = json.loads(m.group(0))
+            except Exception:
+                pass
+        if not parsed_result:
+            parsed_result = {"raw": result_text}
+
+        conn = _copy_job_db()
+        conn.execute(
+            "UPDATE copy_jobs SET status='done', stage=3, stage_msg='文案生成完成', result=?, updated_at=? WHERE id=?",
+            (json.dumps(parsed_result, ensure_ascii=False), time.time(), job_id),
+        )
+        conn.commit()
+        conn.close()
+
+    except Exception as exc:
+        conn = _copy_job_db()
+        conn.execute(
+            "UPDATE copy_jobs SET status='failed', stage_msg=?, error=?, updated_at=? WHERE id=?",
+            (str(exc), str(exc), time.time(), job_id),
+        )
+        conn.commit()
+        conn.close()
+
+
+# ─── Copy Job API ────────────────────────────────────────────────────────────
+
+@router.get("/copy-jobs")
+def list_copy_jobs(_user: str = Depends(require_user)):
+    conn = _copy_job_db()
+    rows = conn.execute(
+        "SELECT id, status, stage, stage_msg, marketplace, product_type, error, created_at, updated_at "
+        "FROM copy_jobs ORDER BY created_at DESC LIMIT 30"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@router.post("/copy-jobs")
+async def create_copy_job(body: CopyJobReq, _user: str = Depends(require_user)):
+    job_id = uuid.uuid4().hex[:12]
+    now = time.time()
+    asins = [a.strip().upper() for a in body.asins if a.strip()][:10]
+    conn = _copy_job_db()
+    conn.execute(
+        "INSERT INTO copy_jobs (id, status, stage, stage_msg, marketplace, product_type, "
+        "asins, product_notes, image_paths, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (job_id, "pending", 0, "等待开始", body.marketplace,
+         body.product_type.strip(), json.dumps(asins),
+         body.product_notes.strip(), "[]", now, now),
+    )
+    conn.commit()
+    conn.close()
+    return {"job_id": job_id, "status": "pending"}
+
+
+@router.post("/copy-jobs/{job_id}/images")
+async def upload_copy_job_images(
+    job_id: str,
+    files: list[UploadFile] = File(...),
+    _user: str = Depends(require_user),
+):
+    conn = _copy_job_db()
+    row = conn.execute("SELECT * FROM copy_jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "job not found")
+    if row["status"] not in ("pending", "uploaded"):
+        raise HTTPException(400, "job already started")
+
+    img_dir = COPY_IMAGES_DIR / job_id
+    img_dir.mkdir(exist_ok=True)
+    saved_paths = json.loads(row["image_paths"] or "[]")
+
+    for f in files[:10]:
+        if not f.filename:
+            continue
+        ext = Path(f.filename).suffix.lower()
+        if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+            continue
+        content = await f.read()
+        if len(content) > 10 * 1024 * 1024:
+            continue
+        fname = f"{uuid.uuid4().hex[:8]}{ext}"
+        dest = img_dir / fname
+        dest.write_bytes(content)
+        saved_paths.append(str(dest))
+
+    conn = _copy_job_db()
+    conn.execute("UPDATE copy_jobs SET image_paths=?, status='uploaded', updated_at=? WHERE id=?",
+                 (json.dumps(saved_paths), time.time(), job_id))
+    conn.commit()
+    conn.close()
+    return {"job_id": job_id, "image_count": len(saved_paths)}
+
+
+@router.post("/copy-jobs/{job_id}/start")
+async def start_copy_job(job_id: str, _user: str = Depends(require_user)):
+    conn = _copy_job_db()
+    row = conn.execute("SELECT * FROM copy_jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "job not found")
+    if row["status"] not in ("pending", "uploaded"):
+        raise HTTPException(400, f"job status is {row['status']}, cannot start")
+
+    conn = _copy_job_db()
+    conn.execute("UPDATE copy_jobs SET status='running', stage=0, stage_msg='启动中…', updated_at=? WHERE id=?",
+                 (time.time(), job_id))
+    conn.commit()
+    conn.close()
+
+    asyncio.create_task(_run_copy_job(job_id))
+    return {"job_id": job_id, "status": "running"}
+
+
+@router.get("/copy-jobs/{job_id}")
+def get_copy_job(job_id: str, _user: str = Depends(require_user)):
+    conn = _copy_job_db()
+    row = conn.execute("SELECT * FROM copy_jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "job not found")
+    d = dict(row)
+    for key in ("asins", "image_paths", "result", "vision_result", "competitor_result"):
+        if d.get(key):
+            try:
+                d[key] = json.loads(d[key])
+            except Exception:
+                pass
+    return d
+
+
+@router.delete("/copy-jobs/{job_id}")
+def delete_copy_job(job_id: str, _user: str = Depends(require_user)):
+    # Clean up images
+    img_dir = COPY_IMAGES_DIR / job_id
+    if img_dir.exists():
+        import shutil
+        shutil.rmtree(img_dir, ignore_errors=True)
+    conn = _copy_job_db()
+    conn.execute("DELETE FROM copy_jobs WHERE id=?", (job_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
     return "\n\n".join(parts)

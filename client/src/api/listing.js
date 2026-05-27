@@ -20,6 +20,7 @@ export const uploadImage = async (id, file) => {
     return (await api.post(`/projects/${id}/upload-image`, fd, { headers: { "Content-Type": "multipart/form-data" } })).data;
 };
 export const getReferenceImages = async (id) => (await api.get(`/projects/${id}/reference-images`)).data;
+export const deleteUploadedImage = async (id, filename) => (await api.delete(`/projects/${id}/uploaded-image/${encodeURIComponent(filename)}`)).data;
 export const generateAllPrompts = async (id, sizes) => (await api.post(`/projects/${id}/generate-all-prompts`, { sizes })).data;
 export const downloadPsd = async (id, url, slot) => {
     const resp = await api.post(`/projects/${id}/download-psd`, { url, slot }, { responseType: "blob" });

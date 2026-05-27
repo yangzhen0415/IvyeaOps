@@ -108,5 +108,11 @@ export async function fetchPulse(keyword: string, marketplace: string): Promise<
     body: JSON.stringify({ keyword, marketplace }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  const data: PulseResult = await r.json();
+  // Surface Sorftime API errors (e.g. expired key) instead of silent dashes
+  if (!data.detail && data.detail_error) {
+    const msg = data.detail_error.replace(/^keyword_detail:\s*/i, "");
+    throw new Error(msg);
+  }
+  return data;
 }

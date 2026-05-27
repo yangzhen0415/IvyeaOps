@@ -1,0 +1,178 @@
+"""User-facing HTTP-only AI sandbox: free-form chat/writing + image generation.
+
+Uses ONLY deepseek / apimart over HTTP — no local CLI agents, no shell, no MCP,
+no filesystem. Safe to expose to registered (non-admin) users.
+"""
+from __future__ import annotations
+
+import json
+from typing import AsyncGenerator, List
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from app.core.security import require_user
+from app.services.ai_synthesis_service import _apimart_base, _apimart_key, _deepseek_key
+
+router = APIRouter()
+
+
+class Msg(BaseModel):
+    role: str
+    content: str
+
+
+class ChatReq(BaseModel):
+    messages: List[Msg]
+
+
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+async def _deepseek_chat(messages: List[Msg]) -> AsyncGenerator[str, None]:
+    key = _deepseek_key()
+    if not key:
+        raise RuntimeError("DeepSeek key 未配置")
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": m.role, "content": m.content} for m in messages],
+        "stream": True,
+        "max_tokens": 4096,
+    }
+    async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as c:
+        async with c.stream("POST", "https://api.deepseek.com/chat/completions",
+                            json=payload, headers={"Authorization": f"Bearer {key}"}) as r:
+            r.raise_for_status()
+            async for line in r.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if raw == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(raw)
+                except Exception:
+                    continue
+                choices = ev.get("choices", [])
+                if choices:
+                    t = choices[0].get("delta", {}).get("content", "")
+                    if t:
+                        yield t
+
+
+async def _apimart_chat(messages: List[Msg]) -> AsyncGenerator[str, None]:
+    key = _apimart_key()
+    if not key:
+        raise RuntimeError("Apimart key 未配置")
+    system = " ".join(m.content for m in messages if m.role == "system")
+    msgs = [{"role": m.role, "content": m.content} for m in messages if m.role in ("user", "assistant")]
+    payload = {"model": "claude-sonnet-4-6", "max_tokens": 4096, "messages": msgs, "stream": True}
+    if system:
+        payload["system"] = system
+    async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as c:
+        async with c.stream("POST", f"{_apimart_base()}/messages", json=payload,
+                            headers={"Authorization": f"Bearer {key}", "anthropic-version": "2023-06-01"}) as r:
+            r.raise_for_status()
+            async for line in r.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                try:
+                    ev = json.loads(raw)
+                except Exception:
+                    continue
+                if ev.get("type") == "content_block_delta":
+                    t = ev.get("delta", {}).get("text", "")
+                    if t:
+                        yield t
+
+
+@router.post("/chat")
+async def chat(req: ChatReq, _user: str = Depends(require_user)) -> StreamingResponse:
+    if not req.messages:
+        raise HTTPException(400, "messages cannot be empty")
+
+    async def gen() -> AsyncGenerator[str, None]:
+        last_err = None
+        for provider, fn in (("deepseek", _deepseek_chat), ("apimart", _apimart_chat)):
+            got = False
+            try:
+                async for t in fn(req.messages):
+                    got = True
+                    yield _sse({"type": "token", "text": t, "provider": provider})
+                if got:
+                    yield _sse({"type": "done", "provider": provider})
+                    return
+            except Exception as e:
+                last_err = f"{provider}: {e}"
+                continue
+        yield _sse({"type": "error", "detail": last_err or "无可用 AI（请在系统配置中填 DeepSeek 或 Apimart key）"})
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class ImageReq(BaseModel):
+    prompt: str
+    size: str = "1024x1024"
+    n: int = 1
+
+
+@router.post("/image")
+async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dict:
+    """Submit an apimart gpt-image-2 job (async). Returns a task_id the client
+    then polls via /image/status (generation takes ~60s)."""
+    key = _apimart_key()
+    if not key:
+        raise HTTPException(400, "Apimart key 未配置（系统配置 → AI 服务）")
+    if not req.prompt.strip():
+        raise HTTPException(400, "提示词不能为空")
+    payload = {"model": "gpt-image-2", "prompt": req.prompt, "n": min(max(req.n, 1), 4), "size": req.size}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as c:
+            r = await c.post(f"{_apimart_base()}/images/generations", json=payload,
+                             headers={"Authorization": f"Bearer {key}"})
+    except Exception as e:
+        raise HTTPException(502, f"生图请求失败：{e}")
+    if r.status_code >= 400:
+        raise HTTPException(502, f"Apimart 生图失败 HTTP {r.status_code}：{r.text[:200]}")
+    item = (r.json().get("data") or [{}])[0]
+    tid = item.get("task_id")
+    if not tid:
+        raise HTTPException(502, "Apimart 未返回任务 ID")
+    return {"task_id": tid}
+
+
+@router.get("/image/status")
+async def image_status(task_id: str, _user: str = Depends(require_user)) -> dict:
+    key = _apimart_key()
+    if not key:
+        raise HTTPException(400, "Apimart key 未配置")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as c:
+            r = await c.get(f"{_apimart_base()}/tasks/{task_id}", headers={"Authorization": f"Bearer {key}"})
+    except Exception as e:
+        raise HTTPException(502, f"查询失败：{e}")
+    if r.status_code >= 400:
+        raise HTTPException(502, f"查询失败 HTTP {r.status_code}")
+    d = r.json().get("data", {}) or {}
+    st = d.get("status", "")
+    out = {"status": st, "progress": d.get("progress", 0), "images": [], "error": None}
+    if st == "completed":
+        for im in (d.get("result", {}) or {}).get("images", []) or []:
+            u = im.get("url") if isinstance(im, dict) else None
+            if isinstance(u, list):
+                out["images"].extend(u)
+            elif isinstance(u, str):
+                out["images"].append(u)
+    elif st in ("failed", "error"):
+        out["error"] = str(d.get("error") or "生图失败")
+    return out
+
+
+@router.get("/status")
+def status(_user: str = Depends(require_user)) -> dict:
+    return {"deepseek": bool(_deepseek_key()), "apimart": bool(_apimart_key())}

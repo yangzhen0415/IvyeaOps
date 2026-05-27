@@ -19,8 +19,15 @@ api.interceptors.response.use(
   },
 );
 
+export type AuthUser = { username: string; role: "admin" | "user" };
+
 export async function login(username: string, password: string) {
-  const { data } = await api.post<{ username: string }>("/auth/login", { username, password });
+  const { data } = await api.post<AuthUser>("/auth/login", { username, password });
+  return data;
+}
+
+export async function register(email: string, password: string) {
+  const { data } = await api.post<{ ok: boolean; message: string }>("/auth/register", { email, password });
   return data;
 }
 
@@ -29,7 +36,38 @@ export async function logout() {
 }
 
 export async function me() {
-  const { data } = await api.get<{ username: string }>("/auth/me");
+  const { data } = await api.get<AuthUser>("/auth/me");
+  return data;
+}
+
+// --- Admin: user management ---
+
+export type ManagedUser = {
+  id: number;
+  email: string;
+  role: string;
+  status: "pending" | "active" | "suspended";
+  created_at: number;
+  approved_at: number | null;
+};
+
+export async function adminListUsers() {
+  const { data } = await api.get<ManagedUser[]>("/auth/admin/users");
+  return data;
+}
+
+export async function adminSetUserStatus(uid: number, status: "active" | "suspended" | "pending") {
+  const { data } = await api.post(`/auth/admin/users/${uid}/status`, { status });
+  return data;
+}
+
+export async function adminResetUserPassword(uid: number, newPassword: string) {
+  const { data } = await api.post(`/auth/admin/users/${uid}/reset-password`, { new_password: newPassword });
+  return data;
+}
+
+export async function adminDeleteUser(uid: number) {
+  const { data } = await api.delete(`/auth/admin/users/${uid}`);
   return data;
 }
 

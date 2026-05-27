@@ -27,6 +27,17 @@ class Settings:
     # bcrypt hash, NOT plaintext. Generate with: python -m app.core.hashpw
     admin_password_hash: str = os.getenv("OPSHUB_PASSWORD_HASH", "")
 
+    def __init__(self):
+        # Auto-hash plaintext ADMIN_PASSWORD if no hash is set
+        if not self.admin_password_hash:
+            plain = os.getenv("ADMIN_PASSWORD", "")
+            if plain:
+                try:
+                    import bcrypt
+                    self.admin_password_hash = bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+                except Exception:
+                    pass
+
     session_cookie_name: str = "opshub_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 7  # 7 days
     # Empty default = host-only cookie (safest). Set to e.g. ".example.com"

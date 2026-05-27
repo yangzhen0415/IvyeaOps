@@ -11,6 +11,7 @@ shaping only.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -536,3 +537,113 @@ def put_settings_route(
         details={"keys": list(payload.keys())},
     )
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Generate Skill from Idea (AI-powered)
+# ---------------------------------------------------------------------------
+
+class GenerateFromIdeaBody(BaseModel):
+    idea: str = Field(..., min_length=2, description="一句话描述你的想法")
+    category: str | None = Field(None, description="目标分类，如 amazon/research")
+    ref_skill: str | None = Field(None, description="参考 Skill 名称（可选）")
+
+
+class GenerateFromIdeaResponse(BaseModel):
+    name: str
+    category: str | None
+    frontmatter: dict
+    body: str
+    preview: str  # full SKILL.md content for preview
+
+
+@router.post("/generate-from-idea", response_model=GenerateFromIdeaResponse)
+async def generate_from_idea(
+    body: GenerateFromIdeaBody,
+    user: str = Depends(require_user),
+) -> GenerateFromIdeaResponse:
+    """Use AI to generate a complete SKILL.md from a one-sentence idea."""
+    from app.services import ai_synthesis_service
+
+    ref_context = ""
+    if body.ref_skill:
+        try:
+            ref = skill_repo.get_skill(body.ref_skill)
+            ref_context = f"\n\n参考 Skill（{body.ref_skill}）的结构：\n---\n{ref.content_body[:2000]}\n---"
+        except Exception:
+            pass
+
+    prompt = f"""你是一位 Hermes Skill 编写专家。用户有一个想法，请帮他生成一个完整的 SKILL.md。
+
+用户想法：{body.idea}
+{f"目标分类：{body.category}" if body.category else "请自行判断最合适的分类。"}
+{ref_context}
+
+请生成一个标准的 Hermes SKILL.md，包含：
+
+1. YAML frontmatter（--- 包裹）：
+   - name: skill 名称（小写+连字符）
+   - description: 一句话英文描述
+   - description_zh: 一句话中文描述
+   - category: 分类路径
+   - icon: 一个合适的 emoji 图标
+
+2. Markdown body：
+   - 简要说明这个 Skill 的用途
+   - 使用场景
+   - 具体步骤（numbered steps）
+   - 如有需要，定义 inputs 参数（用 {{{{param_name}}}} 模板变量）
+   - 注意事项 / pitfalls
+
+只输出 SKILL.md 的完整内容，不要加其他解释。"""
+
+    # Collect the full response
+    chunks = []
+    try:
+        async for prov, chunk in ai_synthesis_service.synthesize_native(
+            "keyword", prompt, "US"
+        ):
+            if prov == "_attempt":
+                continue
+            elif prov == "error":
+                raise HTTPException(502, f"AI 生成失败: {chunk}")
+            else:
+                chunks.append(chunk)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"AI 生成失败: {exc}")
+
+    full_text = "".join(chunks).strip()
+
+    # Extract SKILL.md from markdown code block if wrapped
+    if "```" in full_text:
+        m = re.search(r'```(?:markdown|md)?\s*\n(.*?)```', full_text, re.DOTALL)
+        if m:
+            full_text = m.group(1).strip()
+
+    # Parse the generated SKILL.md
+    fm, body_text = skill_repo._parse_skill_md(full_text)
+
+    # Derive name
+    name = fm.get("name", "")
+    if not name:
+        # Generate from idea
+        name = re.sub(r'[^a-z0-9]+', '-', body.idea.lower())[:40].strip('-')
+        if not name:
+            name = "generated-skill"
+    # Ensure valid segment
+    if not skill_repo._SEGMENT_RE.match(name):
+        name = re.sub(r'[^a-z0-9_-]', '', name.lower())[:40]
+        if not name or not skill_repo._SEGMENT_RE.match(name):
+            name = "generated-skill"
+
+    category = body.category or fm.get("category", "")
+
+    return GenerateFromIdeaResponse(
+        name=name,
+        category=category or None,
+        frontmatter=fm,
+        body=body_text,
+        preview=full_text,
+    )

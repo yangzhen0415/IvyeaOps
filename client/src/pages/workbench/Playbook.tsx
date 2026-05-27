@@ -1,0 +1,574 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  streamPlaybook,
+  fetchHistory,
+  saveHistoryEntry,
+  deleteHistoryEntry,
+  clearHistory as apiClearHistory,
+  type PlaybookMode,
+  type SseEvent,
+  type HistoryEntry,
+} from "../../api/playbook";
+import {
+  MarkdownReport,
+  triggerDownload,
+  markdownToCsv,
+  markdownToHtmlPage,
+  extractCsvBlock,
+  relativeTime,
+} from "../../lib/reportFormat";
+
+interface LocalHistoryEntry {
+  id: string;
+  mode: PlaybookMode;
+  query: string;
+  marketplace: string;
+  price: string;
+  cost: string;
+  provider: string;
+  elapsedS: number;
+  ts: number;
+  report: string;
+}
+
+function toLocal(e: HistoryEntry): LocalHistoryEntry {
+  return { ...e, elapsedS: e.elapsed_s };
+}
+
+const MARKETPLACES: { code: string; flag: string; name: string }[] = [
+  { code: "US", flag: "🇺🇸", name: "美国" },
+  { code: "UK", flag: "🇬🇧", name: "英国" },
+  { code: "DE", flag: "🇩🇪", name: "德国" },
+  { code: "FR", flag: "🇫🇷", name: "法国" },
+  { code: "CA", flag: "🇨🇦", name: "加拿大" },
+  { code: "JP", flag: "🇯🇵", name: "日本" },
+  { code: "ES", flag: "🇪🇸", name: "西班牙" },
+  { code: "IT", flag: "🇮🇹", name: "意大利" },
+  { code: "MX", flag: "🇲🇽", name: "墨西哥" },
+  { code: "AU", flag: "🇦🇺", name: "澳大利亚" },
+];
+
+const EXAMPLE_QUERIES: Record<PlaybookMode, string[]> = {
+  keyword: ["wireless earbuds", "yoga mat", "air fryer", "led desk lamp"],
+  asin: ["B08N5WRWNW", "B09G9FPHY6", "B07ZPKN6YR"],
+};
+
+type Phase = "idle" | "collecting" | "synthesizing" | "done" | "error";
+
+interface ProgressItem {
+  step: string;
+  done: number;
+  total: number;
+}
+
+export default function Playbook() {
+  const [mode, setMode] = useState<PlaybookMode>("keyword");
+  const [query, setQuery] = useState("");
+  const [price, setPrice] = useState("");
+  const [cost, setCost] = useState("");
+  const [marketplace, setMarketplace] = useState("US");
+
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [progress, setProgress] = useState<ProgressItem | null>(null);
+  const [provider, setProvider] = useState("");
+  const [attemptingProvider, setAttemptingProvider] = useState("");
+  const [report, setReport] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [elapsedS, setElapsedS] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [copyLabel, setCopyLabel] = useState("复制");
+  const [dlMenuOpen, setDlMenuOpen] = useState(false);
+  const [liveTimer, setLiveTimer] = useState(0);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<LocalHistoryEntry[]>([]);
+
+  const abortRef = useRef<AbortController | null>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const dlMenuRef = useRef<HTMLDivElement>(null);
+  const startTimeRef = useRef<number>(0);
+
+  const hasCsvBlock = !!extractCsvBlock(report);
+
+  useEffect(() => {
+    if (reportRef.current && phase === "synthesizing") {
+      reportRef.current.scrollTop = reportRef.current.scrollHeight;
+    }
+  }, [report, phase]);
+
+  useEffect(() => {
+    if (phase !== "collecting" && phase !== "synthesizing") return;
+    startTimeRef.current = Date.now();
+    setLiveTimer(0);
+    const id = setInterval(() => {
+      setLiveTimer(Math.round((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pickerOpen]);
+
+  useEffect(() => {
+    if (!dlMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dlMenuRef.current && !dlMenuRef.current.contains(e.target as Node)) setDlMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dlMenuOpen]);
+
+  const handleSubmit = async () => {
+    if (!query.trim() || !price.trim() || phase === "collecting" || phase === "synthesizing") return;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    setPhase("collecting");
+    setProgress(null);
+    setReport("");
+    setWarnings([]);
+    setProvider("");
+    setAttemptingProvider("");
+    setElapsedS(null);
+    setErrorMsg("");
+
+    try {
+      await streamPlaybook(
+        { mode, query: query.trim(), marketplace, price: price.trim(), cost: cost.trim() },
+        (evt: SseEvent) => {
+          if (evt.type === "phase") {
+            setPhase(evt.phase as Phase);
+          } else if (evt.type === "progress") {
+            setProgress({ step: evt.step, done: evt.done, total: evt.total });
+          } else if (evt.type === "attempt") {
+            setAttemptingProvider(evt.provider);
+          } else if (evt.type === "token") {
+            setProvider(evt.provider);
+            setReport((r) => r + evt.text);
+          } else if (evt.type === "warn") {
+            setWarnings((w) => [...w, evt.detail]);
+          } else if (evt.type === "error") {
+            setErrorMsg(evt.detail);
+            setPhase("error");
+          } else if (evt.type === "done") {
+            setProvider(evt.provider);
+            setElapsedS(evt.elapsed_s);
+            setPhase("done");
+          }
+        },
+        ctrl.signal,
+      );
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        const raw = String(err?.message || err);
+        const friendly = /network error|Failed to fetch|TypeError/i.test(raw)
+          ? "与服务器的连接中断。常见原因：(1) AI 合成耗时过长被反代掐断；(2) Sorftime 暂不可用导致采集失败；(3) 服务端 502/503。请检查 ops-hub 服务日志，或稍后重试。"
+          : raw;
+        setErrorMsg(friendly);
+        setPhase("error");
+      }
+    }
+  };
+
+  const handleStop = () => {
+    abortRef.current?.abort();
+    setPhase("idle");
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(report).then(() => {
+      setCopyLabel("已复制");
+      setTimeout(() => setCopyLabel("复制"), 2000);
+    }).catch(() => {});
+  };
+
+  const stem = `playbook-${(query.trim() || "report").replace(/\s+/g, "-")}-${marketplace}`;
+
+  const handleDownloadMd = () => {
+    triggerDownload(report, `${stem}.md`, "text/markdown");
+    setDlMenuOpen(false);
+  };
+
+  const handleDownloadCsv = () => {
+    // Prefer the AI-emitted ```csv ad-bulksheet block; fall back to all tables.
+    const csv = extractCsvBlock(report) || markdownToCsv(report);
+    triggerDownload(csv, `${stem}-ads.csv`, "text/csv;charset=utf-8");
+    setDlMenuOpen(false);
+  };
+
+  const handleDownloadHtml = () => {
+    const html = markdownToHtmlPage(report, {
+      title: `亚马逊打法手册：${query} (${marketplace})`,
+      icon: "◎",
+      meta: [
+        `🛠 ${query}`,
+        `🌍 ${marketplace}`,
+        `💲 目标价 ${price}`,
+        ...(provider ? [`🤖 ${provider}`] : []),
+        ...(elapsedS !== null ? [`⏱ ${elapsedS}s`] : []),
+      ],
+    });
+    triggerDownload(html, `${stem}.html`, "text/html;charset=utf-8");
+    setDlMenuOpen(false);
+  };
+
+  // ── History ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchHistory().then((entries) => setHistory(entries.map(toLocal))).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "done" || !report) return;
+    const ts = Date.now();
+    const apiEntry: HistoryEntry = {
+      id: ts.toString(),
+      mode, query, marketplace, price, cost,
+      provider, elapsed_s: elapsedS ?? 0,
+      ts, report,
+    };
+    saveHistoryEntry(apiEntry).catch(() => {});
+    setHistory((prev) => [toLocal(apiEntry), ...prev].slice(0, 60));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  const handleLoadHistory = (entry: LocalHistoryEntry) => {
+    setMode(entry.mode);
+    setQuery(entry.query);
+    setMarketplace(entry.marketplace);
+    setPrice(entry.price);
+    setCost(entry.cost);
+    setProvider(entry.provider);
+    setElapsedS(entry.elapsedS);
+    setReport(entry.report);
+    setPhase("done");
+    setWarnings([]);
+    setErrorMsg("");
+    setHistoryOpen(false);
+  };
+
+  const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteHistoryEntry(id).catch(() => {});
+    setHistory((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  const handleClearHistory = () => {
+    apiClearHistory().catch(() => {});
+    setHistory([]);
+  };
+
+  const isRunning = phase === "collecting" || phase === "synthesizing";
+  const currentMkt = MARKETPLACES.find((m) => m.code === marketplace)!;
+  const progressPct = progress
+    ? Math.round((progress.done / progress.total) * 100)
+    : phase === "synthesizing" ? 100 : 15;
+
+  return (
+    <div className="market-page">
+      {/* Header row */}
+      <div className="market-header">
+        <span className="market-title">
+          <span className="market-title-icon">◎</span>
+          亚马逊打法推荐
+        </span>
+
+        <div className="market-mode-toggle">
+          {(["keyword", "asin"] as PlaybookMode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setQuery(""); }}
+              disabled={isRunning}
+              className={"market-mode-btn" + (mode === m ? " active" : "")}
+            >
+              {m === "keyword" ? "产品名/类目词" : "竞品ASIN"}
+            </button>
+          ))}
+        </div>
+
+        {isRunning && (
+          <span className="market-live-badge">
+            <span className="market-live-dot" />
+            {liveTimer}s
+          </span>
+        )}
+
+        <button
+          className={"market-history-btn" + (historyOpen ? " active" : "")}
+          onClick={() => setHistoryOpen((o) => !o)}
+          title="历史记录"
+        >
+          历史
+          {history.length > 0 && <span className="market-history-count">{history.length}</span>}
+        </button>
+      </div>
+
+      {/* Input row */}
+      <div className="market-input-row playbook-input-row">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder={mode === "keyword" ? "产品名或类目词，如 wireless earbuds" : "竞品 ASIN，如 B08N5WRWNW"}
+          disabled={isRunning}
+          className="market-query-input"
+        />
+        <input
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="目标售价 $"
+          inputMode="decimal"
+          disabled={isRunning}
+          className="market-query-input playbook-num-input"
+          title="目标售价（必填，USD）"
+        />
+        <input
+          value={cost}
+          onChange={(e) => setCost(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="成本(选填)"
+          inputMode="decimal"
+          disabled={isRunning}
+          className="market-query-input playbook-num-input"
+          title="单件成本估算（选填：采购+头程+FBA，用于利润/ACOS 测算）"
+        />
+
+        {/* Marketplace picker */}
+        <div className="market-mkt-wrap" ref={pickerRef}>
+          <button
+            className="market-mkt-btn"
+            disabled={isRunning}
+            onClick={() => setPickerOpen((o) => !o)}
+            title="选择站点"
+          >
+            <span className="market-mkt-flag">{currentMkt.flag}</span>
+            <span className="market-mkt-code">{currentMkt.code}</span>
+            <span className="market-mkt-arrow">{pickerOpen ? "▴" : "▾"}</span>
+          </button>
+          {pickerOpen && (
+            <div className="market-mkt-dropdown hide-mobile-picker">
+              {MARKETPLACES.map((m) => (
+                <button
+                  key={m.code}
+                  className={"market-mkt-option" + (marketplace === m.code ? " active" : "")}
+                  onClick={() => { setMarketplace(m.code); setPickerOpen(false); }}
+                >
+                  <span>{m.flag}</span>
+                  <span className="market-mkt-option-code">{m.code}</span>
+                  <span className="market-mkt-option-name">{m.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isRunning ? (
+          <button onClick={handleStop} className="market-btn market-btn-stop">停止</button>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={!query.trim() || !price.trim()}
+            className="market-btn market-btn-submit"
+          >
+            生成打法
+          </button>
+        )}
+      </div>
+
+      {/* Mobile bottom sheet picker */}
+      {pickerOpen && (
+        <div className="show-mobile-picker">
+          <div className="market-sheet-backdrop" onClick={() => setPickerOpen(false)} />
+          <div className="market-sheet">
+            <div className="market-sheet-handle" />
+            <div className="market-sheet-title">选择站点</div>
+            <div className="market-sheet-grid">
+              {MARKETPLACES.map((m) => (
+                <button
+                  key={m.code}
+                  className={"market-sheet-item" + (marketplace === m.code ? " active" : "")}
+                  onClick={() => { setMarketplace(m.code); setPickerOpen(false); }}
+                >
+                  <span className="market-sheet-flag">{m.flag}</span>
+                  <span className="market-sheet-code">{m.code}</span>
+                  <span className="market-sheet-name">{m.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Progress */}
+      {isRunning && (
+        <div className="market-progress-wrap">
+          <div className="market-progress-label">
+            <span>
+              {phase === "collecting"
+                ? progress
+                  ? `采集中 · ${progress.step}（${progress.done}/${progress.total}）`
+                  : "连接 Sorftime…"
+                : `AI 合成中${provider ? `（${provider}）` : ""}…`}
+            </span>
+            <span className="market-progress-pct">
+              {progress ? `${progressPct}%` : phase === "synthesizing" ? "合成中" : ""}
+            </span>
+          </div>
+          <div className="market-progress-bar">
+            <div
+              className={"market-progress-fill" + (phase === "synthesizing" ? " shimmer" : "")}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          {phase === "synthesizing" && !report && attemptingProvider && liveTimer >= 20 && (
+            <div className="market-progress-hint">
+              ⏳ 正在调用 <code>{attemptingProvider}</code>
+              {attemptingProvider === "apimart"
+                ? "（API 流式，正常 5-15s 内会有首字）"
+                : "（本机 CLI，整段缓冲，单次通常 1-3 分钟；超时会自动回退下一个提供商）"}
+              ，已等待 {liveTimer}s …
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Warnings */}
+      {warnings.length > 0 && (
+        <div className="market-warnings">
+          {warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+        </div>
+      )}
+
+      {/* Error */}
+      {phase === "error" && (
+        <div className="market-error">{errorMsg || "发生未知错误"}</div>
+      )}
+
+      {/* Report */}
+      {(report || phase === "synthesizing") && (
+        <div className="market-report-wrap">
+          <div className="market-report-toolbar">
+            <span className="market-report-meta">
+              {phase === "done" && elapsedS !== null
+                ? `${provider} · ${elapsedS}s · ${query} · $${price}`
+                : phase === "synthesizing"
+                  ? `${provider || "AI"} 生成中…`
+                  : ""}
+            </span>
+            {report && (
+              <div className="market-report-actions">
+                <button onClick={handleCopy} className="market-btn market-btn-copy">
+                  {copyLabel}
+                </button>
+                <div className="market-dl-wrap" ref={dlMenuRef}>
+                  <button
+                    className="market-btn market-btn-copy market-btn-dl"
+                    onClick={() => setDlMenuOpen((o) => !o)}
+                  >
+                    下载 <span className="market-dl-arrow">{dlMenuOpen ? "▴" : "▾"}</span>
+                  </button>
+                  {dlMenuOpen && (
+                    <div className="market-dl-menu">
+                      <button className="market-dl-item" onClick={handleDownloadMd}>
+                        <span className="market-dl-ext md">.md</span>
+                        <span className="market-dl-label">手册原文</span>
+                      </button>
+                      <button className="market-dl-item" onClick={handleDownloadCsv}>
+                        <span className="market-dl-ext csv">.csv</span>
+                        <span className="market-dl-label">{hasCsvBlock ? "广告批量表" : "表格数据"}</span>
+                      </button>
+                      <button className="market-dl-item" onClick={handleDownloadHtml}>
+                        <span className="market-dl-ext html">.html</span>
+                        <span className="market-dl-label">网页手册</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div ref={reportRef} className="market-report-body">
+            <MarkdownReport text={report} />
+            {phase === "synthesizing" && <span className="cursor-blink">▋</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {phase === "idle" && !report && (
+        <div className="market-empty">
+          <div className="market-empty-icon">◎</div>
+          <div className="market-empty-title">
+            输入{mode === "keyword" ? "产品名/类目词" : "竞品 ASIN"}与目标售价，生成纯白帽站内打法手册
+          </div>
+          <div className="market-empty-chips">
+            {EXAMPLE_QUERIES[mode].map((ex) => (
+              <button key={ex} className="market-example-chip" onClick={() => setQuery(ex)}>
+                {ex}
+              </button>
+            ))}
+          </div>
+          <div className="market-empty-hint">
+            数据来源：Sorftime MCP &nbsp;·&nbsp; AI：Hermes 优先 &nbsp;·&nbsp; 仅站内流量 · 纯白帽
+          </div>
+        </div>
+      )}
+
+      {/* History drawer backdrop */}
+      {historyOpen && (
+        <div className="market-history-backdrop" onClick={() => setHistoryOpen(false)} />
+      )}
+
+      {/* History drawer */}
+      <div className={"market-history-drawer" + (historyOpen ? " open" : "")}>
+        <div className="market-history-hd">
+          <span className="market-history-hd-title">历史记录</span>
+          {history.length > 0 && (
+            <button className="market-history-hd-clear" onClick={handleClearHistory}>清空</button>
+          )}
+          <button className="market-history-hd-close" onClick={() => setHistoryOpen(false)}>✕</button>
+        </div>
+        <div className="market-history-list">
+          {history.length === 0 ? (
+            <div className="market-history-empty">暂无历史记录</div>
+          ) : (
+            history.map((entry) => {
+              const mkt = MARKETPLACES.find((m) => m.code === entry.marketplace);
+              return (
+                <div key={entry.id} className="market-history-item" onClick={() => handleLoadHistory(entry)}>
+                  <div className="market-history-item-top">
+                    <span className={"market-history-mode " + entry.mode}>
+                      {entry.mode === "keyword" ? "词" : "ASIN"}
+                    </span>
+                    <span className="market-history-item-query" title={entry.query}>{entry.query}</span>
+                    <button
+                      className="market-history-item-del"
+                      onClick={(e) => handleDeleteHistory(entry.id, e)}
+                      title="删除"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="market-history-item-meta">
+                    <span>{mkt?.flag} {entry.marketplace}</span>
+                    {entry.price && <span>${entry.price}</span>}
+                    {entry.provider && <span>{entry.provider}</span>}
+                    <span className="market-history-item-time">{relativeTime(entry.ts)}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

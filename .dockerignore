@@ -1,0 +1,12 @@
+data/
+.git
+*.md
+deploy/systemd
+deploy/nginx
+deploy/cron.d
+client/node_modules
+client/.vite
+__pycache__
+*.pyc
+.env
+server/.env

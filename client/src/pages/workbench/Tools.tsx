@@ -42,14 +42,14 @@ export default function Tools() {
       {/* Secondary: ad search-term report audit */}
       <AdAuditPanel />
 
-      {/* Placeholders for upcoming tools */}
-      <div className="sl" style={{ marginTop: 18 }}>即将上线</div>
-      <div className="g3" style={{ marginBottom: 14 }}>
-        <ComingSoonCard icon="🔍" title="关键词竞争分析" desc="反查 ABA/搜索量与头部 ASIN 份额" />
-        <ComingSoonCard icon="⚡" title="竞品反查" desc="竞品 ASIN 的流量词 / 排名 / 广告结构" />
-        <ComingSoonCard icon="💬" title="评论聚类" desc="差评差异化成因识别与修复建议" />
-        <ComingSoonCard icon="✍️" title="Listing 批量改写" desc="多 ASIN 标题 / 五点 / QA 批量生成" />
-        <ComingSoonCard icon="📈" title="流量异动诊断" desc="自有 ASIN 流量下跌根因分析" />
+      {/* Link to deep analysis page */}
+      <div style={{ marginTop: 18, padding: "12px 16px", background: "var(--bg2)", borderRadius: "var(--r)", border: "1px solid var(--b)", display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 16 }}>⊖</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--t)" }}>更多分析工具已上线</div>
+          <div style={{ fontSize: 10, color: "var(--t3)" }}>关键词竞争分析、竞品反查、评论聚类、Listing 批量改写、流量异动诊断</div>
+        </div>
+        <a href="/deep-analysis" className="tbtn" style={{ textDecoration: "none", fontSize: 10 }}>前往深度分析 →</a>
       </div>
     </div>
   );

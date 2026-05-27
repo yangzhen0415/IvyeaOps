@@ -583,8 +583,11 @@ _PRICING = {
 }
 
 
-def _estimate_cost(model: str, inp: int, out: int) -> float:
-    """Estimate cost in USD based on model pricing."""
+def _estimate_cost(model: str, inp: int, out: int, cache_read: int = 0, cache_write: int = 0) -> float:
+    """Estimate cost in USD based on model pricing.
+
+    cache_read tokens cost 0.1× the input rate; cache_write tokens cost 1.25×.
+    """
     key = model.lower() if model else ""
     prices = None
     for k, v in _PRICING.items():
@@ -593,7 +596,12 @@ def _estimate_cost(model: str, inp: int, out: int) -> float:
             break
     if not prices:
         prices = (3, 15)  # default to sonnet-level pricing
-    return (inp * prices[0] + out * prices[1]) / 1_000_000
+    return (
+        inp * prices[0]
+        + out * prices[1]
+        + cache_read * prices[0] * 0.1
+        + cache_write * prices[0] * 1.25
+    ) / 1_000_000
 
 
 def _scan_claude_sessions(since: float) -> list:
@@ -606,7 +614,7 @@ def _scan_claude_sessions(since: float) -> list:
     for jsonl in root.rglob("*.jsonl"):
         if jsonl.stat().st_mtime < since:
             continue
-        session_input = session_output = 0
+        session_input = session_output = session_cache_read = session_cache_write = 0
         model = None
         ts = jsonl.stat().st_mtime
         with open(jsonl) as fh:
@@ -617,14 +625,23 @@ def _scan_claude_sessions(since: float) -> list:
                     if isinstance(msg, dict):
                         usage = msg.get("usage", {})
                         if usage:
-                            session_input += usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+                            session_input += usage.get("input_tokens", 0)
+                            session_cache_read += usage.get("cache_read_input_tokens", 0)
+                            session_cache_write += usage.get("cache_creation_input_tokens", 0)
                             session_output += usage.get("output_tokens", 0)
                         if not model and msg.get("model"):
                             model = msg["model"]
                 except Exception:
                     pass
-        if session_input > 0 or session_output > 0:
-            results.append({"ts": ts, "model": model or "claude-code", "input": session_input, "output": session_output})
+        if session_input > 0 or session_output > 0 or session_cache_read > 0 or session_cache_write > 0:
+            results.append({
+                "ts": ts,
+                "model": model or "claude-code",
+                "input": session_input,
+                "output": session_output,
+                "cache_read": session_cache_read,
+                "cache_write": session_cache_write,
+            })
     return results
 
 
@@ -802,13 +819,13 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
         if source:
             m[key]["sources"].add(source)
 
-    def _add(ts: float, model: str, inp: int, out: int, agent: str, source: str, credits: float = 0.0):
+    def _add(ts: float, model: str, inp: int, out: int, agent: str, source: str, credits: float = 0.0, cache_read: int = 0, cache_write: int = 0):
         dt = _datetime.fromtimestamp(ts, tz=_LOCAL_TZ)
         day = dt.strftime("%Y-%m-%d")
         week = dt.strftime("%Y-W%W")
         month = dt.strftime("%Y-%m")
         total = inp + out
-        cost = _estimate_cost(model, inp, out)
+        cost = _estimate_cost(model, inp, out, cache_read, cache_write)
         for key, m in [(day, daily_map), (week, weekly_map), (month, monthly_map)]:
             if key not in m:
                 m[key] = {"sessions": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0}
@@ -855,10 +872,13 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
                    FROM sessions WHERE started_at > ?""",
                 (since,),
             ).fetchall():
-                inp = (row[2] or 0) + (row[4] or 0) + (row[5] or 0)
+                inp = row[2] or 0
                 out = (row[3] or 0) + (row[6] or 0)
+                cache_read = row[4] or 0
+                cache_write = row[5] or 0
                 src = row[7] or "hermes"
-                _add(row[0], row[1] or "hermes", inp, out, "Hermes", f"Hermes/{src}")
+                _add(row[0], row[1] or "hermes", inp, out, "Hermes", f"Hermes/{src}",
+                     cache_read=cache_read, cache_write=cache_write)
                 count += 1
                 total_seen += inp + out
             conn.close()
@@ -967,7 +987,8 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
             claude_sessions = _scan_claude_sessions(since)
             claude_total = 0
             for s in claude_sessions:
-                _add(s["ts"], s["model"], s["input"], s["output"], "Claude Code", "Claude Code")
+                _add(s["ts"], s["model"], s["input"], s["output"], "Claude Code", "Claude Code",
+                     cache_read=s.get("cache_read", 0), cache_write=s.get("cache_write", 0))
                 claude_total += s["input"] + s["output"]
             _cov("Claude Code", claude_projects_p, "included", len(claude_sessions), claude_total)
         except Exception:

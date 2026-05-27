@@ -21,6 +21,19 @@ export default function ChatPane({ session, showCli = false, showInherited = fal
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<string[]>([]);
+  // true = user is near bottom, auto-scroll should follow; false = user scrolled up
+  const pinnedRef = useRef(true);
+
+  const isNearBottom = () => {
+    const el = scrollerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
+  const scrollToBottom = () => {
+    if (scrollerRef.current)
+      scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
+  };
 
   const refresh = async () => {
     try {
@@ -32,6 +45,7 @@ export default function ChatPane({ session, showCli = false, showInherited = fal
   };
 
   useEffect(() => {
+    pinnedRef.current = true;
     setMessages([]);
     setPartial("");
     refresh();
@@ -53,9 +67,7 @@ export default function ChatPane({ session, showCli = false, showInherited = fal
   }, [session.id]);
 
   useEffect(() => {
-    if (scrollerRef.current) {
-      scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
-    }
+    if (pinnedRef.current) scrollToBottom();
   }, [messages, partial]);
 
   const submit = async () => {
@@ -71,6 +83,7 @@ export default function ChatPane({ session, showCli = false, showInherited = fal
     setStreaming(true);
     setError(null);
     setPartial("");
+    pinnedRef.current = true;
 
     // Auto-name session on first user message if title looks like default
     const isDefaultTitle = !session.title || /^(新会话|.+ 会话)$/.test(session.title);
@@ -118,7 +131,8 @@ export default function ChatPane({ session, showCli = false, showInherited = fal
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {/* Scroller */}
-      <div ref={scrollerRef} className="chat-body" style={{ display: "flex", flexDirection: "column" }}>
+      <div ref={scrollerRef} className="chat-body" style={{ display: "flex", flexDirection: "column" }}
+        onScroll={() => { pinnedRef.current = isNearBottom(); }}>
         {visible.length === 0 && !partial && (
           <div style={{ margin: "auto", color: "var(--t3)", fontSize: 11, textAlign: "center", padding: 30 }}>
             <div style={{ fontSize: 26, color: "var(--b2)", marginBottom: 10 }}>🍃</div>

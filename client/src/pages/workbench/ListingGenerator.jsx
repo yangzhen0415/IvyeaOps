@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import {
   aiAnalyze,
   applyTemplate,
   createProject,
   deleteProject,
+  deleteUploadedImage,
   downloadPsd,
   generateAplusPrompts,
   generateCopy,
@@ -12,6 +13,7 @@ import {
   generateImagePrompt,
   generateMainPrompts,
   getProject,
+  getReferenceImages,
   getTemplates,
   listProjects,
   reviewImagePrompt,
@@ -19,6 +21,7 @@ import {
   saveProductInfo,
   saveTemplate,
   scrapeProject,
+  uploadImage,
 } from "../../api/listing";
 
 const MAIN_DEFAULTS = [
@@ -139,7 +142,7 @@ const inputStyle = {
   outline: "none",
 };
 
-export default function ListingGenerator() {
+export default function ListingGenerator({ onProjectAsin } = {}) {
   const confirm = useConfirm();
   const [projects, setProjects] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -167,6 +170,18 @@ export default function ListingGenerator() {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
+  // Reference / source images
+  const [refImages, setRefImages] = useState({ scraped: [], uploaded: [] });
+  const [refUploading, setRefUploading] = useState(false);
+  const [refDragOver, setRefDragOver] = useState(false);
+  const refInputRef = useRef(null);
+
+  // Advanced copy job state
+  const [advCopyJob, setAdvCopyJob] = useState(null);
+  const [advCopyLaunching, setAdvCopyLaunching] = useState(false);
+  const [advCopyCopied, setAdvCopyCopied] = useState(null);
+  const advCopyPollRef = useRef(null);
+
   useEffect(() => { loadProjects(); }, []);
   useEffect(() => { if (activeId) loadProject(activeId); }, [activeId]);
 
@@ -186,6 +201,14 @@ export default function ListingGenerator() {
     setProject(p);
     setFeedback(null);
     setProductInfo(EMPTY_PRODUCT_INFO);
+    setRefImages({ scraped: [], uploaded: [] });
+    setAdvCopyJob(null);
+    if (advCopyPollRef.current) { clearTimeout(advCopyPollRef.current); advCopyPollRef.current = null; }
+    // Load reference images for this project
+    try {
+      const ri = await getReferenceImages(id);
+      setRefImages({ scraped: ri.scraped || [], uploaded: ri.uploaded || [] });
+    } catch { /* ignore */ }
     setImageSlots(makeSlots(MAIN_DEFAULTS));
     setAplusSlots(makeSlots(APLUS_DEFAULTS));
     const cr = {};
@@ -237,7 +260,7 @@ export default function ListingGenerator() {
 
   const flowStatus = useMemo(() => {
     const hasProductInfo = Object.values(productInfo).some((v) => String(v || "").trim());
-    const hasCopy = ["title", "bullets", "search_terms", "aplus"].some((k) => copyResult[k]);
+    const hasCopy = advCopyJob?.status === "done" || ["title", "bullets", "search_terms", "aplus"].some((k) => copyResult[k]);
     const mainPromptCount = imageSlots.filter((s) => s.prompt).length;
     const aplusPromptCount = aplusSlots.filter((s) => s.prompt).length;
     const imageCount = [...imageSlots, ...aplusSlots].filter((s) => s.url).length;
@@ -249,7 +272,7 @@ export default function ListingGenerator() {
       { label: `A+提示词 ${aplusPromptCount}/${aplusSlots.length}`, ok: aplusPromptCount > 0 },
       { label: `图片 ${imageCount}`, ok: imageCount > 0 },
     ];
-  }, [analysisResult, aplusSlots, copyResult, imageSlots, productInfo, scraped.title]);
+  }, [advCopyJob, analysisResult, aplusSlots, copyResult, imageSlots, productInfo, scraped.title]);
 
   function messageOf(e) {
     return e?.response?.data?.detail || e?.message || String(e);
@@ -269,9 +292,11 @@ export default function ListingGenerator() {
 
   async function handleCreate() {
     if (!newAsin.trim()) return;
+    const asin = newAsin.trim();
     setLoading("creating");
     try {
-      const res = await createProject(newAsin.trim(), newMkt);
+      const res = await createProject(asin, newMkt);
+      onProjectAsin?.(asin);
       setNewAsin("");
       await loadProjects();
       setActiveId(res.id);
@@ -308,6 +333,33 @@ export default function ListingGenerator() {
     setLoading("");
   }
 
+  async function handleUploadRefImages(files) {
+    if (!activeId || !files.length) return;
+    setRefUploading(true);
+    try {
+      for (const file of Array.from(files).slice(0, 8)) {
+        await uploadImage(activeId, file);
+      }
+      const ri = await getReferenceImages(activeId);
+      setRefImages({ scraped: ri.scraped || [], uploaded: ri.uploaded || [] });
+      notify("success", `上传了 ${Math.min(files.length, 8)} 张素材图`);
+    } catch (e) {
+      notify("error", "上传失败: " + (e.message || "未知错误"));
+    } finally {
+      setRefUploading(false);
+    }
+  }
+
+  async function handleDeleteRefImage(filename) {
+    if (!activeId) return;
+    try {
+      await deleteUploadedImage(activeId, filename);
+      setRefImages(prev => ({ ...prev, uploaded: prev.uploaded.filter(u => u.filename !== filename) }));
+    } catch (e) {
+      notify("error", "删除失败: " + (e.message || ""));
+    }
+  }
+
   async function handleAnalyze() {
     if (!activeId) return;
     setLoading("analyzing");
@@ -332,6 +384,62 @@ export default function ListingGenerator() {
       notify("error", "生成失败: " + messageOf(e));
     }
     setLoading("");
+  }
+
+  const pollAdvCopy = useCallback(async (jobId) => {
+    try {
+      const r = await fetch(`/api/listing/copy-jobs/${jobId}`, { credentials: "include" });
+      if (!r.ok) return;
+      const job = await r.json();
+      setAdvCopyJob(job);
+      if (job.status === "running" || job.status === "pending" || job.status === "uploaded") {
+        advCopyPollRef.current = setTimeout(() => pollAdvCopy(jobId), 2000);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => () => { if (advCopyPollRef.current) clearTimeout(advCopyPollRef.current); }, []);
+
+  async function handleAdvancedCopy() {
+    if (!activeId || !project) return;
+    if (advCopyPollRef.current) { clearTimeout(advCopyPollRef.current); advCopyPollRef.current = null; }
+    setAdvCopyLaunching(true);
+    try {
+      const notes = [
+        productInfo.product_name && `产品: ${productInfo.product_name}`,
+        productInfo.target_audience && `目标受众: ${productInfo.target_audience}`,
+        productInfo.selling_points && `卖点: ${productInfo.selling_points}`,
+        productInfo.description && `描述: ${productInfo.description}`,
+        scraped.title && `参考标题: ${scraped.title}`,
+        scraped.bullets.length > 0 && `参考五点:\n${scraped.bullets.join("\n")}`,
+      ].filter(Boolean).join("\n");
+      const r = await fetch("/api/listing/copy-jobs", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          marketplace: project.marketplace || "US",
+          product_type: productInfo.product_name || project.asin || "product",
+          asins: project.asin ? [project.asin] : [],
+          product_notes: notes,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || "创建失败");
+      const { job_id } = await r.json();
+      await fetch(`/api/listing/copy-jobs/${job_id}/start`, { method: "POST", credentials: "include" });
+      setAdvCopyJob({ id: job_id, status: "running", stage: 0, stage_msg: "启动中..." });
+      pollAdvCopy(job_id);
+    } catch (e) {
+      notify("error", "文案生成失败: " + (e.message || "未知错误"));
+    } finally {
+      setAdvCopyLaunching(false);
+    }
+  }
+
+  function copyAdvText(text, key) {
+    navigator.clipboard.writeText(text).then(() => {
+      setAdvCopyCopied(key);
+      setTimeout(() => setAdvCopyCopied(null), 1500);
+    });
   }
 
   async function persistSlots(nextMain = imageSlots, nextAplus = aplusSlots) {
@@ -835,20 +943,222 @@ export default function ListingGenerator() {
                   <Btn onClick={handleSaveInfo} disabled={busy}>保存产品信息</Btn>
                   {renderScrapeResult()}
                   {analysisResult && <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 10, background: "var(--bg2)", padding: 10, borderRadius: 4, maxHeight: 260, overflowY: "auto" }}>{analysisResult}</pre>}
+
+                  {/* ── 素材图上传 ── */}
+                  <div style={{ marginTop: 14, border: "1px solid var(--b)", borderRadius: 4 }}>
+                    <div style={{ padding: "7px 10px", background: "var(--bg2)", fontSize: 10, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>素材图 / 参考图 &nbsp;<span style={{ color: "var(--t3)", fontWeight: 400 }}>生成图片时优先使用，替代采集到的竞品图</span></span>
+                      <span style={{ color: "var(--t3)" }}>{refImages.uploaded.length} 张已上传</span>
+                    </div>
+                    <div style={{ padding: 10 }}>
+                      {/* Uploaded thumbnails */}
+                      {refImages.uploaded.length > 0 && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                          {refImages.uploaded.map((img) => (
+                            <div key={img.filename} style={{ position: "relative" }}>
+                              <img
+                                src={img.url} alt=""
+                                onClick={() => setPreviewUrl(img.url)}
+                                style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 3, border: "1px solid var(--b)", cursor: "zoom-in" }}
+                              />
+                              <button
+                                onClick={() => handleDeleteRefImage(img.filename)}
+                                style={{ position: "absolute", top: -4, right: -4, width: 15, height: 15, borderRadius: "50%", background: "var(--red)", border: "none", color: "#fff", fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                              >×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Upload zone */}
+                      <div
+                        onDragOver={e => { e.preventDefault(); setRefDragOver(true); }}
+                        onDragLeave={() => setRefDragOver(false)}
+                        onDrop={e => { e.preventDefault(); setRefDragOver(false); handleUploadRefImages(e.dataTransfer.files); }}
+                        onClick={() => refInputRef.current?.click()}
+                        style={{
+                          border: `2px dashed ${refDragOver ? "var(--acc)" : "var(--b)"}`,
+                          borderRadius: 4, padding: "10px", textAlign: "center", cursor: "pointer",
+                          background: refDragOver ? "rgba(74,222,128,.05)" : undefined, transition: "all .15s",
+                        }}
+                      >
+                        <span style={{ fontSize: 10, color: "var(--t3)" }}>
+                          {refUploading ? "上传中…" : "拖放或点击上传本地产品素材图（白底图、场景图等）"}
+                        </span>
+                        <input ref={refInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+                          onChange={e => e.target.files && handleUploadRefImages(e.target.files)} />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {tab === "copy" && (
                 <div className="card" style={{ padding: 12 }}>
-                  {["title", "bullets", "search_terms", "aplus"].map((type) => (
-                    <div key={type} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: "1px solid var(--b)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600 }}>{({ title: "标题", bullets: "五点描述", search_terms: "搜索词", aplus: "A+文案" })[type]}</span>
-                        <Btn onClick={() => handleCopy(type)} primary disabled={busy}>生成</Btn>
+                  {/* Header + generate button */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: "var(--t3)" }}>
+                        站点: <b style={{ color: "var(--t)" }}>{project.marketplace || "US"}</b>
+                        &nbsp;·&nbsp;ASIN: <b style={{ color: "var(--t)" }}>{project.asin || "-"}</b>
+                        &nbsp;·&nbsp;产品: <b style={{ color: "var(--t)" }}>{productInfo.product_name || "（未填写）"}</b>
                       </div>
-                      <div style={{ fontSize: 10, color: "var(--t2)", whiteSpace: "pre-wrap", background: "var(--bg2)", padding: 8, borderRadius: 3 }}>{copyResult[type] || "未生成"}</div>
                     </div>
-                  ))}
+                    <Btn onClick={handleAdvancedCopy} primary
+                      disabled={busy || advCopyLaunching || advCopyJob?.status === "running"}>
+                      {advCopyLaunching ? "启动中…" : advCopyJob?.status === "running" ? "生成中…" : "生成文案"}
+                    </Btn>
+                    {advCopyJob && advCopyJob.status !== "running" && (
+                      <Btn onClick={() => setAdvCopyJob(null)}>重新生成</Btn>
+                    )}
+                  </div>
+
+                  {/* Progress */}
+                  {advCopyJob && (advCopyJob.status === "running" || advCopyJob.status === "pending") && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", gap: 0, marginBottom: 8 }}>
+                        {["图片识别", "竞品数据", "文案生成", "完成"].map((label, i) => {
+                          const done = i < (advCopyJob.stage || 0);
+                          const active = i === (advCopyJob.stage || 0);
+                          return (
+                            <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                              <div style={{
+                                width: 22, height: 22, borderRadius: "50%", margin: "0 auto 4px",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                background: done ? "var(--acc)" : active ? "rgba(74,222,128,.15)" : "var(--bg2)",
+                                border: active ? "2px solid var(--acc)" : "2px solid var(--b)",
+                                fontSize: 10, fontWeight: 700,
+                                color: done ? "#000" : active ? "var(--acc)" : "var(--t3)",
+                              }}>
+                                {done ? "✓" : i + 1}
+                              </div>
+                              <div style={{ fontSize: 9, color: active ? "var(--t)" : "var(--t3)" }}>{label}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ fontSize: 10, color: "var(--t3)", textAlign: "center" }}>{advCopyJob.stage_msg}</div>
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {advCopyJob?.status === "failed" && (
+                    <div style={{ fontSize: 10, color: "var(--red)", background: "rgba(248,113,113,.08)", border: "1px solid rgba(248,113,113,.25)", borderRadius: 4, padding: "8px 10px", marginBottom: 12 }}>
+                      生成失败：{advCopyJob.error}
+                    </div>
+                  )}
+
+                  {/* Results */}
+                  {advCopyJob?.status === "done" && advCopyJob.result && (() => {
+                    const res = advCopyJob.result;
+                    return (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {res.rationale && (
+                          <div style={{ fontSize: 10, color: "var(--t2)", background: "var(--bg2)", padding: "8px 10px", borderRadius: 4, lineHeight: 1.6, borderLeft: "3px solid var(--acc)" }}>
+                            {res.rationale}
+                          </div>
+                        )}
+
+                        {/* Titles */}
+                        {res.titles?.length > 0 && (
+                          <div style={{ border: "1px solid var(--b)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ padding: "7px 10px", background: "var(--bg2)", fontSize: 10, fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                              <span>标题方案 ({res.titles.length}个)</span>
+                              <button onClick={() => copyAdvText(res.titles.join("\n\n"), "titles")} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9 }}>
+                                {advCopyCopied === "titles" ? "✓ 已复制" : "复制全部"}
+                              </button>
+                            </div>
+                            {res.titles.map((t, i) => (
+                              <div key={i} style={{ padding: "7px 10px", borderTop: "1px solid var(--b)", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ fontSize: 9, color: "var(--t3)", minWidth: 18 }}>T{i+1}</span>
+                                <span style={{ flex: 1, fontSize: 10, color: "var(--t)", lineHeight: 1.6 }}>{t}</span>
+                                <button onClick={() => copyAdvText(t, `t${i}`)} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9, flexShrink: 0 }}>
+                                  {advCopyCopied === `t${i}` ? "✓" : "复制"}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Bullets A */}
+                        {res.bullets_a?.length > 0 && (
+                          <div style={{ border: "1px solid var(--b)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ padding: "7px 10px", background: "var(--bg2)", fontSize: 10, fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                              <span>五点描述 Set A（转化焦点）</span>
+                              <button onClick={() => copyAdvText(res.bullets_a.join("\n\n"), "ba")} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9 }}>
+                                {advCopyCopied === "ba" ? "✓" : "复制全部"}
+                              </button>
+                            </div>
+                            {res.bullets_a.map((b, i) => (
+                              <div key={i} style={{ padding: "7px 10px", borderTop: "1px solid var(--b)", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ fontSize: 10, color: "var(--acc)", fontWeight: 700, minWidth: 18 }}>{i+1}.</span>
+                                <span style={{ flex: 1, fontSize: 10, color: "var(--t)", lineHeight: 1.6 }}>{b}</span>
+                                <button onClick={() => copyAdvText(b, `ba${i}`)} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9, flexShrink: 0 }}>
+                                  {advCopyCopied === `ba${i}` ? "✓" : "复制"}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Bullets B */}
+                        {res.bullets_b?.length > 0 && (
+                          <div style={{ border: "1px solid var(--b)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ padding: "7px 10px", background: "var(--bg2)", fontSize: 10, fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                              <span>五点描述 Set B（Rufus 问答焦点）</span>
+                              <button onClick={() => copyAdvText(res.bullets_b.join("\n\n"), "bb")} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9 }}>
+                                {advCopyCopied === "bb" ? "✓" : "复制全部"}
+                              </button>
+                            </div>
+                            {res.bullets_b.map((b, i) => (
+                              <div key={i} style={{ padding: "7px 10px", borderTop: "1px solid var(--b)", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ fontSize: 10, color: "var(--acc)", fontWeight: 700, minWidth: 18 }}>{i+1}.</span>
+                                <span style={{ flex: 1, fontSize: 10, color: "var(--t)", lineHeight: 1.6 }}>{b}</span>
+                                <button onClick={() => copyAdvText(b, `bb${i}`)} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9, flexShrink: 0 }}>
+                                  {advCopyCopied === `bb${i}` ? "✓" : "复制"}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Search Terms */}
+                        {res.search_terms?.length > 0 && (
+                          <div style={{ border: "1px solid var(--b)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ padding: "7px 10px", background: "var(--bg2)", fontSize: 10, fontWeight: 600 }}>后台 Search Terms</div>
+                            {res.search_terms.map((st, i) => (
+                              <div key={i} style={{ padding: "7px 10px", borderTop: "1px solid var(--b)", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ fontSize: 9, color: st.length > 249 ? "var(--red)" : "var(--acc)", minWidth: 44 }}>ST{i+1} {st.length}字</span>
+                                <span style={{ flex: 1, fontSize: 10, color: "var(--t2)", wordBreak: "break-all", lineHeight: 1.6 }}>{st}</span>
+                                <button onClick={() => copyAdvText(st, `st${i}`)} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9, flexShrink: 0 }}>
+                                  {advCopyCopied === `st${i}` ? "✓" : "复制"}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Compliance */}
+                        {res.compliance_notes?.length > 0 && (
+                          <div style={{ fontSize: 10, background: "rgba(251,191,36,.06)", border: "1px solid rgba(251,191,36,.2)", borderRadius: 4, padding: "8px 10px" }}>
+                            <div style={{ color: "var(--amber)", fontWeight: 600, marginBottom: 4 }}>合规检查</div>
+                            {res.compliance_notes.map((n, i) => <div key={i} style={{ color: "var(--t2)", lineHeight: 1.6 }}>· {n}</div>)}
+                          </div>
+                        )}
+
+                        {/* Raw fallback */}
+                        {!res.titles && res.raw && (
+                          <pre style={{ fontSize: 10, color: "var(--t2)", background: "var(--bg2)", padding: 10, borderRadius: 4, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{res.raw}</pre>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Empty state */}
+                  {!advCopyJob && (
+                    <div style={{ fontSize: 10, color: "var(--t3)", textAlign: "center", padding: "24px 0" }}>
+                      点击"生成文案"，AI 将结合产品信息和竞品数据生成<br />标题×5 · 五点×2套 · Search Terms×2
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -858,7 +1168,25 @@ export default function ListingGenerator() {
               {tab === "output" && (
                 <div className="card" style={{ padding: 12 }}>
                   <div className="ct" style={{ marginBottom: 8 }}>Listing 完整输出</div>
-                  <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 10, background: "var(--bg2)", padding: 10, borderRadius: 4 }}>{`TITLE:\n${copyResult.title || ""}\n\nBULLETS:\n${copyResult.bullets || ""}\n\nSEARCH TERMS:\n${copyResult.search_terms || ""}\n\nA+ COPY:\n${copyResult.aplus || ""}`}</pre>
+                  {advCopyJob?.status === "done" && advCopyJob.result?.titles ? (
+                    <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 10, background: "var(--bg2)", padding: 10, borderRadius: 4 }}>
+                      {[
+                        "=== 标题方案 ===",
+                        ...(advCopyJob.result.titles || []).map((t, i) => `T${i+1}: ${t}`),
+                        "",
+                        "=== 五点 Set A ===",
+                        ...(advCopyJob.result.bullets_a || []).map((b, i) => `${i+1}. ${b}`),
+                        "",
+                        "=== 五点 Set B ===",
+                        ...(advCopyJob.result.bullets_b || []).map((b, i) => `${i+1}. ${b}`),
+                        "",
+                        "=== Search Terms ===",
+                        ...(advCopyJob.result.search_terms || []).map((st, i) => `ST${i+1}: ${st}`),
+                      ].join("\n")}
+                    </pre>
+                  ) : (
+                    <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 10, background: "var(--bg2)", padding: 10, borderRadius: 4 }}>{`TITLE:\n${copyResult.title || ""}\n\nBULLETS:\n${copyResult.bullets || ""}\n\nSEARCH TERMS:\n${copyResult.search_terms || ""}\n\nA+ COPY:\n${copyResult.aplus || ""}`}</pre>
+                  )}
                   <div style={{ display: "flex", gap: 4, overflowX: "auto", marginTop: 8 }}>
                     {[...imageSlots, ...aplusSlots].filter((s) => s.url).map((s) => <img key={s.id} src={s.url} title={s.label} style={{ height: 80, borderRadius: 3 }} />)}
                   </div>

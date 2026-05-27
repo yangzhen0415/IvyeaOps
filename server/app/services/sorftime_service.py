@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 
 import httpx
@@ -122,11 +123,33 @@ async def _safe_call(
         return tool_name, None, f"{tool_name}: {exc}"
 
 
-def _make_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(
+@asynccontextmanager
+async def _make_client():
+    """Async context manager that creates an httpx client and performs the
+    MCP initialize handshake required by Sorftime before any tool/call."""
+    import json as _json
+    async with httpx.AsyncClient(
         timeout=httpx.Timeout(_TOOL_TIMEOUT, connect=_CONN_TIMEOUT),
         limits=httpx.Limits(max_connections=20),
-    )
+    ) as client:
+        try:
+            init_payload = {
+                "jsonrpc": "2.0", "id": 0, "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "ops-hub", "version": "1.0"},
+                },
+            }
+            resp = await asyncio.wait_for(
+                client.post(_url(), json=init_payload, headers=_HEADERS),
+                timeout=_CONN_TIMEOUT,
+            )
+            resp.raise_for_status()
+            _log.debug("sorftime initialize ok")
+        except Exception as exc:
+            _log.warning("sorftime initialize failed: %s", exc)
+        yield client
 
 
 # ─── Progress callback type ───────────────────────────────────────────────────

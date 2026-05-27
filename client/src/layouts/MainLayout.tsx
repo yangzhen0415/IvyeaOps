@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../api/client";
+import { useAuth } from "../App";
 import Terminal from "../pages/workbench/Terminal";
 
 type NavItem = {
@@ -8,6 +9,7 @@ type NavItem = {
   icon: string;
   label: string;
   badge?: string;
+  admin?: boolean;        // true = visible to admin only
 };
 
 type NavSection = {
@@ -17,34 +19,35 @@ type NavSection = {
 
 const NAV: NavSection[] = [
   {
-    title: "运营",
+    title: "工具",
     items: [
       { to: "/", icon: "⌂", label: "首页" },
-      { to: "/tools", icon: "⚙", label: "工具箱" },
-      { to: "/imgflow", icon: "◧", label: "Listing生成" },
       { to: "/market", icon: "◈", label: "市场调研" },
+      { to: "/playbook", icon: "◎", label: "打法推荐" },
+      { to: "/freight", icon: "⊞", label: "头程比价" },
+      { to: "/listing", icon: "◧", label: "Listing工作台", admin: true },
+      { to: "/tools", icon: "⊕", label: "工具箱", admin: true },
+      { to: "/deep-analysis", icon: "⊖", label: "深度分析", admin: true },
+      { to: "/skill-hub", icon: "✦", label: "Skill 中心", admin: true },
     ],
   },
   {
-    title: "AI 系统",
+    title: "AI & 系统",
     items: [
-      { to: "/agents", icon: "◇", label: "智能体会话" },
-      { to: "/skill", icon: "✦", label: "Skill Studio" },
-      { to: "/brain", icon: "▣", label: "GBrain 知识库" },
+      { to: "/assistant", icon: "⊡", label: "AI 问答" },
+      { to: "/imagegen", icon: "▦", label: "AI 生图" },
+      { to: "/agents", icon: "◉", label: "智能体会话", admin: true },
+      { to: "/brain", icon: "▣", label: "GBrain 知识库", admin: true },
+      { to: "/terminal", icon: "▶", label: "服务器终端", admin: true },
+      { to: "/servmon", icon: "⊙", label: "服务器监控", admin: true },
     ],
   },
   {
-    title: "基础设施",
+    title: "管理",
     items: [
-      { to: "/terminal", icon: "▶", label: "服务器终端" },
-      { to: "/servmon", icon: "◉", label: "服务器监控" },
-    ],
-  },
-  {
-    title: "其他",
-    items: [
-      { to: "/news", icon: "≡", label: "资讯", badge: "3" },
-      { to: "/hub-settings", icon: "⊙", label: "系统配置" },
+      { to: "/users", icon: "⊗", label: "用户管理", admin: true },
+      { to: "/hub-settings", icon: "⚙", label: "系统配置", admin: true },
+      { to: "/news", icon: "≡", label: "资讯", admin: true },
     ],
   },
 ];
@@ -52,8 +55,17 @@ const NAV: NavSection[] = [
 const PATH_LABEL: Record<string, string> = {
   "/": "~/首页",
   "/tools": "~/工具箱",
-  "/imgflow": "~/Listing生成",
+  "/listing": "~/Listing工作台",
+  "/freight": "~/头程比价",
   "/market": "~/市场调研",
+  "/playbook": "~/打法推荐",
+  "/assistant": "~/AI问答",
+  "/imagegen": "~/AI生图",
+  "/idea-skill": "~/想法工坊",
+  "/skill-tools": "~/运营商店",
+  "/skill-hub": "~/Skill中心",
+  "/deep-analysis": "~/深度分析",
+  "/users": "~/用户管理",
   "/skill": "~/SkillStudio",
   "/brain": "~/GBrain知识库",
   "/agents": "~/智能体会话",
@@ -69,6 +81,12 @@ const PATH_LABEL: Record<string, string> = {
 export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
+  // Registered (non-admin) users only see the safe, allowed modules.
+  const navSections = NAV
+    .map((sec) => ({ ...sec, items: sec.items.filter((it) => isAdmin || !it.admin) }))
+    .filter((sec) => sec.items.length > 0);
   const [termMounted, setTermMounted] = useState(false);
   const THEMES = [
     "dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light",
@@ -131,6 +149,10 @@ export default function MainLayout() {
     return THEMES.includes(saved as any) ? saved! : "dark";
   });
   const [themePicker, setThemePicker] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
   const themePickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -218,7 +240,7 @@ export default function MainLayout() {
           </button>
         </div>
         <nav>
-          {NAV.map((sec) => (
+          {navSections.map((sec) => (
             <div key={sec.title}>
               <div className="ns">{sec.title}</div>
               {sec.items.map((it) => (

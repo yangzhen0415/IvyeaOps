@@ -21,20 +21,22 @@ router = APIRouter()
 
 # ── History DB ────────────────────────────────────────────────────────────────
 
-_HISTORY_DB = settings.data_dir / "market_history.sqlite3"
 _HISTORY_MAX = 60
+_INITED: set = set()   # db paths whose schema has been ensured
+
+
+def _history_db_path() -> str:
+    from app.core.security import user_data_dir
+    return str(user_data_dir() / "market_history.sqlite3")
 
 
 def _history_connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(_HISTORY_DB), isolation_level=None, timeout=10.0)
+    path = _history_db_path()
+    conn = sqlite3.connect(path, isolation_level=None, timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
-    return conn
-
-
-def _init_history_db() -> None:
-    with _history_connect() as conn:
+    if path not in _INITED:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS market_history (
                 id          TEXT PRIMARY KEY,
@@ -47,6 +49,14 @@ def _init_history_db() -> None:
                 report      TEXT NOT NULL DEFAULT ''
             )
         """)
+        _INITED.add(path)
+    return conn
+
+
+def _init_history_db() -> None:
+    # Initialize the admin (shared) DB at startup; per-user DBs are created
+    # lazily on first access via _history_connect().
+    _history_connect().close()
 
 
 class HistoryEntryIn(BaseModel):

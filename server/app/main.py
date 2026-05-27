@@ -5,12 +5,13 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
+from app.core.security import require_admin
 from app.core.skill_paths import (
     SKILLS_ROOT,
     ensure_studio_dirs,
@@ -19,10 +20,16 @@ from app.core.skill_paths import (
 from app.routers import ad_audit, agent_hub, amazon, auth, brain, health, monitor, news, skill, terminal
 from app.routers import listing as listing_router
 from app.routers import market as market_router
+from app.routers import playbook as playbook_router
+from app.routers import home as home_router
+from app.routers import assistant as assistant_router
 from app.routers import hub_settings as hub_settings_router
 from app.routers import projects as projects_router
 from app.routers import git as git_router
 from app.routers import setup as setup_router
+from app.routers import freight as freight_router
+from app.routers import deep_analysis as deep_analysis_router
+from app.routers import skill_tools as skill_tools_router
 
 
 # Methods that can mutate state; anything not in this set is exempt from the
@@ -98,6 +105,30 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[ops-hub] market history DB init skipped: {e}")
 
+    # Launch-playbook history DB.
+    try:
+        from app.routers.playbook import _init_history_db as _init_playbook_hist
+        _init_playbook_hist()
+        print("[ops-hub] playbook history DB ready")
+    except Exception as e:
+        print(f"[ops-hub] playbook history DB init skipped: {e}")
+
+    # Home monitor (watchlist + snapshots) DB.
+    try:
+        from app.routers.home import _init_db as _init_home_db
+        _init_home_db()
+        print("[ops-hub] home monitor DB ready")
+    except Exception as e:
+        print(f"[ops-hub] home monitor DB init skipped: {e}")
+
+    # Registered-users DB (multi-user mode).
+    try:
+        from app.services import users_service
+        users_service.init_db()
+        print("[ops-hub] users DB ready")
+    except Exception as e:
+        print(f"[ops-hub] users DB init skipped: {e}")
+
     # Brain chat/upload metadata DB is local SQLite; initialize eagerly so
     # schema problems are visible at boot, while keeping the service lightweight.
     try:
@@ -147,10 +178,31 @@ async def lifespan(app: FastAPI):
     notify_status("ready")
     _watchdog_task = asyncio.create_task(watchdog_loop(), name="sd-watchdog")
 
+    # Home market-traffic daily recorder: wakes every 30 min and records a
+    # daily point for each tracked baseline / watched ASIN that lacks one.
+    # Best-effort, never blocks boot or shutdown.
+    async def _market_daily_loop():
+        while True:
+            try:
+                from app.routers.home import run_due_recordings
+                summary = await run_due_recordings()
+                if summary.get("recorded_market") or summary.get("recorded_asin"):
+                    print(f"[ops-hub] market recorder: {summary}")
+            except Exception as e:
+                print(f"[ops-hub] market recorder error: {e}")
+            await asyncio.sleep(1800)
+
+    _market_task = asyncio.create_task(_market_daily_loop(), name="market-recorder")
+
     yield
     _watchdog_task.cancel()
+    _market_task.cancel()
     try:
         await _watchdog_task
+    except (asyncio.CancelledError, Exception):
+        pass
+    try:
+        await _market_task
     except (asyncio.CancelledError, Exception):
         pass
     try:
@@ -198,6 +250,22 @@ if settings.dev_mode:
 
 
 @app.middleware("http")
+async def _user_context(request: Request, call_next):
+    """Set the current-user contextvar in the request's async context so it
+    reliably reaches async streaming endpoints (e.g. AI synthesis must be
+    HTTP-only for non-admin users). Best-effort: never raises — real auth
+    enforcement stays in the require_user/require_admin dependencies."""
+    token = request.cookies.get(settings.session_cookie_name)
+    if token:
+        try:
+            from app.core.security import _resolve_session_principal, current_user
+            current_user.set(_resolve_session_principal(token))
+        except Exception:
+            pass
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def _origin_guard(request: Request, call_next):
     # Only guard API writes; GETs and non-API routes (SPA) are unaffected.
     if request.method in _UNSAFE_METHODS and request.url.path.startswith("/api/"):
@@ -218,7 +286,7 @@ async def _origin_guard(request: Request, call_next):
                 parts = urlsplit(referer)
                 if parts.scheme and parts.netloc:
                     origin = f"{parts.scheme}://{parts.netloc}"
-        if origin not in _ALLOWED:
+        if _ALLOWED and origin not in _ALLOWED:
             return JSONResponse(
                 status_code=403,
                 content={"detail": "origin not allowed"},
@@ -227,22 +295,34 @@ async def _origin_guard(request: Request, call_next):
 
 # --- API routes (prefixed /api) ---
 # IMPORTANT: must be registered BEFORE the SPA catch-all below.
+# Admin-only dependency: locks routers that can execute code / touch the
+# filesystem / change config. Registered (non-admin) users get 403.
+_ADMIN = [Depends(require_admin)]
+
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(amazon.router, prefix="/api/amazon", tags=["amazon"])
-app.include_router(ad_audit.router, prefix="/api/ad-audit", tags=["ad-audit"])
-app.include_router(monitor.router, prefix="/api/monitor", tags=["monitor"])
-app.include_router(skill.router, prefix="/api/skill", tags=["skill"])
-app.include_router(news.router, prefix="/api/news", tags=["news"])
-app.include_router(brain.router, prefix="/api/brain", tags=["brain"])
-app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"])
-app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"])
-app.include_router(agent_hub.router, prefix="/api", tags=["agent-hub"])
+# --- Admin-only (code-exec / filesystem / config / server) ---
+app.include_router(amazon.router, prefix="/api/amazon", tags=["amazon"], dependencies=_ADMIN)
+app.include_router(ad_audit.router, prefix="/api/ad-audit", tags=["ad-audit"], dependencies=_ADMIN)
+app.include_router(monitor.router, prefix="/api/monitor", tags=["monitor"], dependencies=_ADMIN)
+app.include_router(skill.router, prefix="/api/skill", tags=["skill"], dependencies=_ADMIN)
+app.include_router(news.router, prefix="/api/news", tags=["news"], dependencies=_ADMIN)
+app.include_router(brain.router, prefix="/api/brain", tags=["brain"], dependencies=_ADMIN)
+app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"], dependencies=_ADMIN)
+app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"], dependencies=_ADMIN)
+app.include_router(agent_hub.router, prefix="/api", tags=["agent-hub"], dependencies=_ADMIN)
+app.include_router(hub_settings_router.router, prefix="/api", tags=["settings"], dependencies=_ADMIN)
+app.include_router(projects_router.router, prefix="/api", tags=["projects"], dependencies=_ADMIN)
+app.include_router(git_router.router, prefix="/api", tags=["git"], dependencies=_ADMIN)
+app.include_router(setup_router.router, prefix="/api", tags=["setup"], dependencies=_ADMIN)
+# --- Open to registered users (analytical; AI forced HTTP-only) ---
 app.include_router(market_router.router, prefix="/api/market", tags=["market"])
-app.include_router(hub_settings_router.router, prefix="/api", tags=["settings"])
-app.include_router(projects_router.router, prefix="/api", tags=["projects"])
-app.include_router(git_router.router, prefix="/api", tags=["git"])
-app.include_router(setup_router.router, prefix="/api", tags=["setup"])
+app.include_router(playbook_router.router, prefix="/api/playbook", tags=["playbook"])
+app.include_router(home_router.router, prefix="/api/home", tags=["home"])
+app.include_router(freight_router.router, prefix="/api/freight", tags=["freight"])
+app.include_router(deep_analysis_router.router, prefix="/api/deep-analysis", tags=["deep-analysis"], dependencies=_ADMIN)
+app.include_router(skill_tools_router.router, prefix="/api/skill-tools", tags=["skill-tools"], dependencies=_ADMIN)
+app.include_router(assistant_router.router, prefix="/api/assistant", tags=["assistant"])
 
 
 # --- Frontend: serve React SPA (client/dist) ---
