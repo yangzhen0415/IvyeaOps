@@ -804,6 +804,146 @@ def _append_coverage(rows: list, source: str, path: _Path, status: str, sessions
     })
 
 
+# ── Token source registry ────────────────────────────────────────────────────
+# Each scanner reads ONE upstream tool's local store and yields flat records:
+#   {ts, model, input, output, agent, source, credits, cache_read, cache_write}
+# Plus a coverage dict describing what was found. To add a NEW tool later,
+# write a scanner and register it in _TOKEN_SOURCES — nothing else changes.
+
+def _rec(ts, model, inp, out, agent, source, credits=0.0, cache_read=0, cache_write=0):
+    return {"ts": ts, "model": model, "input": inp, "output": out, "agent": agent,
+            "source": source, "credits": credits, "cache_read": cache_read, "cache_write": cache_write}
+
+
+def _scan_hermes(since: float):
+    p = _hermes_db()
+    if not (p and p.exists()):
+        return [], {"source": "Hermes", "path": p, "status": "missing"}
+    recs, total = [], 0
+    try:
+        conn = _sqlite3.connect(str(p))
+        for row in conn.execute(
+            """SELECT started_at, model, input_tokens, output_tokens, cache_read_tokens,
+                      cache_write_tokens, reasoning_tokens, source
+               FROM sessions WHERE started_at > ?""", (since,)).fetchall():
+            inp = row[2] or 0
+            out = (row[3] or 0) + (row[6] or 0)
+            recs.append(_rec(row[0], row[1] or "hermes", inp, out, "Hermes",
+                             f"Hermes/{row[7] or 'hermes'}", cache_read=row[4] or 0, cache_write=row[5] or 0))
+            total += inp + out
+        conn.close()
+        return recs, {"source": "Hermes", "path": p, "status": "included", "sessions": len(recs), "total": total}
+    except Exception as e:
+        return recs, {"source": "Hermes", "path": p, "status": f"error: {e}"}
+
+
+def _scan_kiro_gateway(since: float):
+    p = _kiro_gw_db()
+    if not (p and p.exists()):
+        return [], {"source": "Kiro Gateway", "path": p, "status": "missing"}
+    recs, total = [], 0
+    try:
+        conn = _sqlite3.connect(str(p))
+        for row in conn.execute(
+            "SELECT ts, model, prompt_tokens, completion_tokens, total_tokens, source FROM token_usage WHERE ts > ?",
+            (since,)).fetchall():
+            inp, out = row[2] or 0, row[3] or 0
+            if not inp and not out and row[4]:
+                inp, out = int(row[4] * 0.8), int(row[4] * 0.2)
+            recs.append(_rec(row[0], row[1] or "kiro-gateway", inp, out, "Kiro", row[5] or "kiro-gateway"))
+            total += inp + out
+        conn.close()
+        return recs, {"source": "Kiro Gateway", "path": p, "status": "included", "sessions": len(recs), "total": total}
+    except Exception:
+        return recs, {"source": "Kiro Gateway", "path": p, "status": "error"}
+
+
+def _scan_kiro_cli(since: float):
+    p = _kiro_cli_sessions()
+    if not (p and p.exists()):
+        return [], {"source": "Kiro CLI sessions", "path": p, "status": "missing"}
+    recs, total, credits_seen = [], 0, 0.0
+    try:
+        for s in _scan_kiro_cli_sessions(since):
+            c = s.get("credits") or 0.0
+            recs.append(_rec(s["ts"], s["model"], s["input"], s["output"], "Kiro", "Kiro CLI estimate", credits=c))
+            total += s["input"] + s["output"]
+            credits_seen += c
+        return recs, {"source": "Kiro CLI sessions", "path": p, "status": "estimated-from-context-usage",
+                      "sessions": len(recs), "total": total, "credits": credits_seen}
+    except Exception:
+        return recs, {"source": "Kiro CLI sessions", "path": p, "status": "error"}
+
+
+def _scan_codex_source(since: float, path_getter, agent: str, source_name: str):
+    p = path_getter()
+    if not (p and p.exists()):
+        return [], {"source": source_name, "path": p, "status": "missing"}
+    recs, total = [], 0
+    try:
+        conn = _sqlite3.connect(str(p))
+        for row in conn.execute(
+            """SELECT created_at, updated_at, model, tokens_used, rollout_path
+               FROM threads WHERE tokens_used > 0 AND updated_at > ?""", (since,)).fetchall():
+            usage = _read_codex_rollout_usage(row[4])
+            if usage and usage["total"] > 0:
+                ts, inp, out = usage["ts"] or row[1] or row[0], usage["input"], usage["output"]
+            else:
+                tot = row[3] or 0
+                ts, inp, out = row[1] or row[0], int(tot * 0.8), int(tot * 0.2)
+            recs.append(_rec(ts, row[2] or "codex", inp, out, agent, source_name))
+            total += inp + out
+        conn.close()
+        return recs, {"source": source_name, "path": p, "status": "included", "sessions": len(recs), "total": total}
+    except Exception:
+        return recs, {"source": source_name, "path": p, "status": "error"}
+
+
+def _scan_claude(since: float):
+    p = _claude_projects()
+    if not (p and p.exists()):
+        return [], {"source": "Claude Code", "path": p, "status": "missing"}
+    recs, total = [], 0
+    try:
+        for s in _scan_claude_sessions(since):
+            recs.append(_rec(s["ts"], s["model"], s["input"], s["output"], "Claude Code", "Claude Code",
+                             cache_read=s.get("cache_read", 0), cache_write=s.get("cache_write", 0)))
+            total += s["input"] + s["output"]
+        return recs, {"source": "Claude Code", "path": p, "status": "included", "sessions": len(recs), "total": total}
+    except Exception:
+        return recs, {"source": "Claude Code", "path": p, "status": "error"}
+
+
+# Registry of all token sources. Append a (name, scanner) here to add a tool.
+_TOKEN_SOURCES = [
+    ("Hermes", _scan_hermes),
+    ("Kiro Gateway", _scan_kiro_gateway),
+    ("Kiro CLI", _scan_kiro_cli),
+    ("Codex", lambda since: _scan_codex_source(since, _codex_db, "Codex", "Codex")),
+    ("Feishu Codex", lambda since: _scan_codex_source(since, _feishu_codex_db, "Hermes", "Hermes/Feishu Codex Relay")),
+    ("Claude Code", _scan_claude),
+]
+
+
+def iter_all_records(since: float):
+    """Scan every registered source. Returns (records, coverage_rows).
+
+    Single source of truth shared by the live endpoint and the archiver.
+    """
+    all_recs: list = []
+    coverage: list = []
+    for _name, scanner in _TOKEN_SOURCES:
+        try:
+            recs, cov = scanner(since)
+        except Exception as e:  # a broken scanner must not kill the rest
+            recs, cov = [], {"source": _name, "path": None, "status": f"error: {e}"}
+        all_recs.extend(recs)
+        p = cov.get("path")
+        _append_coverage(coverage, cov["source"], p if p is not None else _Path("(unconfigured)"),
+                         cov["status"], cov.get("sessions", 0), cov.get("total", 0), cov.get("credits", 0.0))
+    return all_recs, coverage
+
+
 @router.get("/token-usage")
 def token_usage(_user: str = Depends(require_user)) -> dict:
     """Token usage stats from ALL sources on this server."""
@@ -878,155 +1018,33 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
     # Full lookback window — 2 years covers all current data with headroom.
     since = now - 730 * 86400
 
-    # Resolve integration paths once per request so a live hub_settings edit
-    # takes effect on the next call. Each is Optional[Path]; the helper
-    # below stringifies None as "(unconfigured)" for the coverage report.
-    hermes_db_p = _hermes_db()
-    kiro_gw_db_p = _kiro_gw_db()
-    codex_db_p = _codex_db()
-    feishu_codex_db_p = _feishu_codex_db()
-    kiro_cli_db_p = _kiro_cli_db()
-    kiro_cli_sessions_p = _kiro_cli_sessions()
-    claude_projects_p = _claude_projects()
+    # --- Live scan: every registered source (single source of truth) ---
+    live_records, coverage = iter_all_records(since)
+    seen_live_day_source = set()  # (day, source) present in live data
+    for r in live_records:
+        day = _datetime.fromtimestamp(r["ts"], tz=_LOCAL_TZ).strftime("%Y-%m-%d")
+        seen_live_day_source.add((day, r["source"]))
+        _add(r["ts"], r["model"], r["input"], r["output"], r["agent"], r["source"],
+             r["credits"], r["cache_read"], r["cache_write"])
 
-    def _cov(source: str, p: _Path | None, status: str, sessions: int = 0, total: int = 0, credits: float = 0.0):
-        _append_coverage(coverage, source, p if p is not None else _Path("(unconfigured)"),
-                         status, sessions, total, credits)
-
-    # --- Source 1: Hermes state.db ---
-    if hermes_db_p and hermes_db_p.exists():
-        try:
-            conn = _sqlite3.connect(str(hermes_db_p))
-            count = total_seen = 0
-            for row in conn.execute(
-                """SELECT started_at, model, input_tokens, output_tokens, cache_read_tokens,
-                          cache_write_tokens, reasoning_tokens, source
-                   FROM sessions WHERE started_at > ?""",
-                (since,),
-            ).fetchall():
-                inp = row[2] or 0
-                out = (row[3] or 0) + (row[6] or 0)
-                cache_read = row[4] or 0
-                cache_write = row[5] or 0
-                src = row[7] or "hermes"
-                _add(row[0], row[1] or "hermes", inp, out, "Hermes", f"Hermes/{src}",
-                     cache_read=cache_read, cache_write=cache_write)
-                count += 1
-                total_seen += inp + out
-            conn.close()
-            _cov("Hermes", hermes_db_p, "included", count, total_seen)
-        except Exception as e:
-            _cov("Hermes", hermes_db_p, f"error: {e}")
-    else:
-        _cov("Hermes", hermes_db_p, "missing")
-
-    # --- Source 2: Kiro-gateway usage.db ---
-    if kiro_gw_db_p and kiro_gw_db_p.exists():
-        try:
-            conn = _sqlite3.connect(str(kiro_gw_db_p))
-            count = total_seen = 0
-            for row in conn.execute(
-                "SELECT ts, model, prompt_tokens, completion_tokens, total_tokens, source FROM token_usage WHERE ts > ?",
-                (since,),
-            ).fetchall():
-                inp = row[2] or 0
-                out = row[3] or 0
-                if not inp and not out and row[4]:
-                    inp = int(row[4] * 0.8)
-                    out = int(row[4] * 0.2)
-                _add(row[0], row[1] or "kiro-gateway", inp, out, "Kiro", row[5] or "kiro-gateway")
-                count += 1
-                total_seen += inp + out
-            conn.close()
-            _cov("Kiro Gateway", kiro_gw_db_p, "included", count, total_seen)
-        except Exception:
-            _cov("Kiro Gateway", kiro_gw_db_p, "error")
-    else:
-        _cov("Kiro Gateway", kiro_gw_db_p, "missing")
-
-    # Kiro CLI stores conversation history locally, but this DB does not expose token totals.
-    if kiro_cli_db_p and kiro_cli_db_p.exists():
-        try:
-            conn = _sqlite3.connect(str(kiro_cli_db_p))
-            count = conn.execute("SELECT count(*) FROM conversations_v2").fetchone()[0]
-            conn.close()
-            _cov("Kiro CLI local", kiro_cli_db_p, "found-no-token-counters", count, 0)
-        except Exception:
-            _cov("Kiro CLI local", kiro_cli_db_p, "error")
-
-    if kiro_cli_sessions_p and kiro_cli_sessions_p.exists():
-        try:
-            sessions = _scan_kiro_cli_sessions(since)
-            total_seen = 0
-            credits_seen = 0.0
-            for s in sessions:
-                credits = s.get("credits") or 0.0
-                _add(s["ts"], s["model"], s["input"], s["output"], "Kiro", "Kiro CLI estimate", credits)
-                total_seen += s["input"] + s["output"]
-                credits_seen += credits
-            _cov(
-                "Kiro CLI sessions",
-                kiro_cli_sessions_p,
-                "estimated-from-context-usage",
-                len(sessions),
-                total_seen,
-                credits_seen,
-            )
-        except Exception:
-            _cov("Kiro CLI sessions", kiro_cli_sessions_p, "error")
-    else:
-        _cov("Kiro CLI sessions", kiro_cli_sessions_p, "missing")
-
-    def _scan_codex_db(path: _Path | None, agent: str, source_name: str):
-        if path is None or not path.exists():
-            _cov(source_name, path, "missing")
-            return
-        try:
-            conn = _sqlite3.connect(str(path))
-            count = total_seen = 0
-            for row in conn.execute(
-                """SELECT created_at, updated_at, model, tokens_used, rollout_path
-                   FROM threads WHERE tokens_used > 0 AND updated_at > ?""",
-                (since,),
-            ).fetchall():
-                usage = _read_codex_rollout_usage(row[4])
-                if usage and usage["total"] > 0:
-                    ts = usage["ts"] or row[1] or row[0]
-                    inp = usage["input"]
-                    out = usage["output"]
-                else:
-                    total = row[3] or 0
-                    ts = row[1] or row[0]
-                    inp = int(total * 0.8)
-                    out = int(total * 0.2)
-                _add(ts, row[2] or "codex", inp, out, agent, source_name)
-                count += 1
-                total_seen += inp + out
-            conn.close()
-            _cov(source_name, path, "included", count, total_seen)
-        except Exception:
-            _cov(source_name, path, "error")
-
-    # --- Source 3: Codex (OpenAI Codex CLI) ---
-    _scan_codex_db(codex_db_p, "Codex", "Codex")
-
-    # --- Source 4: Feishu Codex relay belongs to Hermes ---
-    _scan_codex_db(feishu_codex_db_p, "Hermes", "Hermes/Feishu Codex Relay")
-
-    # --- Source 5: Claude Code ---
-    if claude_projects_p and claude_projects_p.exists():
-        try:
-            claude_sessions = _scan_claude_sessions(since)
-            claude_total = 0
-            for s in claude_sessions:
-                _add(s["ts"], s["model"], s["input"], s["output"], "Claude Code", "Claude Code",
-                     cache_read=s.get("cache_read", 0), cache_write=s.get("cache_write", 0))
-                claude_total += s["input"] + s["output"]
-            _cov("Claude Code", claude_projects_p, "included", len(claude_sessions), claude_total)
-        except Exception:
-            _cov("Claude Code", claude_projects_p, "error")
-    else:
-        _cov("Claude Code", claude_projects_p, "missing")
+    # --- Archive backfill: replay archived rows for (day, source) pairs the
+    # live scan did NOT cover, so history survives even after a tool is deleted.
+    try:
+        from app.services import token_archive
+        backfill_sources: dict = {}
+        for ar in token_archive.load_records(since):
+            if (ar["day"], ar["source"]) in seen_live_day_source:
+                continue  # live data wins for days still readable
+            _add(ar["ts"], ar["model"], ar["input"], ar["output"], ar["agent"],
+                 ar["source"], ar.get("credits", 0.0), ar.get("cache_read", 0), ar.get("cache_write", 0))
+            agg = backfill_sources.setdefault(ar["source"], 0)
+            backfill_sources[ar["source"]] = agg + ar["input"] + ar["output"]
+        for src, tok in sorted(backfill_sources.items()):
+            coverage.append({"source": f"{src} (归档)", "path": "token_archive.sqlite3",
+                             "status": "from-archive", "sessions": 0,
+                             "total_tokens": tok, "credits": 0})
+    except Exception:
+        pass
 
     # Format output
     def _to_list(m, key_name):

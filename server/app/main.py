@@ -195,15 +195,43 @@ async def lifespan(app: FastAPI):
 
     _market_task = asyncio.create_task(_market_daily_loop(), name="market-recorder")
 
+    # Token-usage archiver: snapshot each tool's token data into ops-hub's own
+    # DB once a day so history survives even after a tool is uninstalled.
+    # Runs once shortly after boot, then every 24h. Best-effort.
+    try:
+        from app.services import token_archive
+        token_archive.init_db()
+        print("[ops-hub] token archive DB ready")
+    except Exception as e:
+        print(f"[ops-hub] token archive init skipped: {e}")
+
+    async def _token_archive_loop():
+        await asyncio.sleep(120)  # let boot settle before first snapshot
+        while True:
+            try:
+                from app.services import token_archive
+                summary = await asyncio.to_thread(token_archive.archive_run, 7)
+                print(f"[ops-hub] token archive: {summary}")
+            except Exception as e:
+                print(f"[ops-hub] token archive error: {e}")
+            await asyncio.sleep(86400)  # daily
+
+    _archive_task = asyncio.create_task(_token_archive_loop(), name="token-archiver")
+
     yield
     _watchdog_task.cancel()
     _market_task.cancel()
+    _archive_task.cancel()
     try:
         await _watchdog_task
     except (asyncio.CancelledError, Exception):
         pass
     try:
         await _market_task
+    except (asyncio.CancelledError, Exception):
+        pass
+    try:
+        await _archive_task
     except (asyncio.CancelledError, Exception):
         pass
     try:
