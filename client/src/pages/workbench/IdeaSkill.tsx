@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 
 interface GeneratedSkill {
@@ -23,6 +24,7 @@ const CATEGORIES = [
 ];
 
 export default function IdeaSkill() {
+  const navigate = useNavigate();
   const [idea, setIdea] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,6 +32,10 @@ export default function IdeaSkill() {
   const [generated, setGenerated] = useState<GeneratedSkill | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const savedName = generated
+    ? (generated.category ? `${generated.category}/${generated.name}` : generated.name)
+    : "";
 
   const generate = useCallback(async () => {
     if (!idea.trim() || loading) return;
@@ -50,8 +56,9 @@ export default function IdeaSkill() {
     }
   }, [idea, category, loading]);
 
-  const save = useCallback(async () => {
-    if (!generated || saving) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!generated || saving) return false;
+    if (saved) return true;  // already saved; allow navigation to proceed
     setSaving(true);
     setError("");
     try {
@@ -64,12 +71,14 @@ export default function IdeaSkill() {
         frontmatter_extras: generated.frontmatter,
       });
       setSaved(true);
+      return true;
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || "保存失败");
+      return false;
     } finally {
       setSaving(false);
     }
-  }, [generated, saving]);
+  }, [generated, saving, saved]);
 
   return (
     <div>
@@ -161,13 +170,21 @@ export default function IdeaSkill() {
           </div>
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button
               className="market-btn market-btn-submit"
+              onClick={async () => { const ok = await save(); if (ok && savedName) navigate(`/skill-tools?tool=${encodeURIComponent(savedName)}`); }}
+              disabled={saving}
+            >
+              {saving ? "保存中…" : "🚀 保存并打开工具"}
+            </button>
+            <button
+              className="tbtn"
               onClick={save}
               disabled={saving || saved}
+              style={{ fontSize: 11 }}
             >
-              {saved ? "✓ 已保存" : saving ? "保存中…" : "💾 保存到 Skill 库"}
+              {saved ? "✓ 已保存" : "仅保存到 Skill 库"}
             </button>
             <button
               className="tbtn"
@@ -180,7 +197,7 @@ export default function IdeaSkill() {
 
           {saved && (
             <div style={{ marginTop: 10, fontSize: 11, color: "var(--green)" }}>
-              ✓ Skill 已保存！可在「运营商店」中查看和执行，或在「Skill Studio」中编辑。
+              ✓ Skill 已保存！可在「运营商店」执行，或在工具页右上角「☆ 固定到侧边栏」把它变成常驻入口。
             </div>
           )}
         </div>

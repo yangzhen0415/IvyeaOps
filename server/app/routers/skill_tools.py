@@ -32,6 +32,7 @@ class SkillToolMeta(BaseModel):
     icon: str = "⊞"
     inputs: list[dict[str, Any]] = Field(default_factory=list)
     has_execution: bool = False  # whether the skill has a clear execution flow
+    pinned: bool = False         # pinned skills get their own sidebar entry
 
 
 class SkillToolListResponse(BaseModel):
@@ -167,6 +168,7 @@ def list_tools(
             icon=_detect_icon(fm, m.category),
             inputs=inputs,
             has_execution=has_execution,
+            pinned=bool(getattr(m, "pinned", False)),
         ))
 
     # Build category counts
@@ -181,48 +183,146 @@ def list_tools(
     )
 
 
+@router.get("/pinned", response_model=list[SkillToolMeta])
+def list_pinned_tools() -> list[SkillToolMeta]:
+    """Pinned skills only — drives the dynamic sidebar entries. Cheap: no body parse."""
+    out: list[SkillToolMeta] = []
+    for m in skill_repo.list_skills():
+        if not getattr(m, "pinned", False):
+            continue
+        try:
+            detail = skill_repo.get_skill(m.name)
+            fm = detail.frontmatter
+            inputs = _parse_inputs_from_frontmatter(fm) or _parse_inputs_from_body(detail.content_body)
+            icon = _detect_icon(fm, m.category)
+        except Exception:
+            fm, inputs, icon = {}, [], "⊞"
+        out.append(SkillToolMeta(
+            name=m.name, category=m.category, description=m.description,
+            description_zh=m.description_zh, icon=icon, inputs=inputs,
+            has_execution=True, pinned=True,
+        ))
+    return out
+
+
+class PinBody(BaseModel):
+    skill_name: str
+    pinned: bool
+
+
+@router.post("/pin", response_model=SkillToolMeta)
+def pin_tool(body: PinBody) -> SkillToolMeta:
+    """Pin/unpin a skill so it shows (or hides) as a dedicated sidebar tool."""
+    try:
+        skill_repo.set_pinned(body.skill_name, body.pinned)
+        detail = skill_repo.get_skill(body.skill_name)
+    except Exception as exc:
+        raise HTTPException(404, f"Skill not found: {exc}")
+    fm = detail.frontmatter
+    inputs = _parse_inputs_from_frontmatter(fm) or _parse_inputs_from_body(detail.content_body)
+    return SkillToolMeta(
+        name=detail.name, category=detail.category, description=detail.description,
+        description_zh=detail.description_zh, icon=_detect_icon(fm, detail.category),
+        inputs=inputs, has_execution=True, pinned=bool(body.pinned),
+    )
+
+
+_ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+async def _run_skill_agent(skill_basename: str, params: dict, skill_body: str):
+    """Execute a skill through a real hermes agent (`hermes -z --skills <name>`).
+
+    Unlike the old path (which fed the SKILL.md as a plain prompt to the
+    market-research synthesizer), this preloads the actual skill so hermes can
+    follow its steps and use its tools. Streams stdout token-by-token.
+    """
+    import asyncio
+    from app.services.runners import _find_bin, build_child_env
+
+    binary = _find_bin("hermes")
+    if not binary:
+        yield ("error", "hermes CLI 不可用")
+        return
+
+    params_section = "\n".join(f"- {k}: {v}" for k, v in params.items() if v)
+    prompt = (
+        f"请执行 skill「{skill_basename}」。\n\n"
+        f"## 用户提供的参数\n{params_section or '（无额外参数）'}\n\n"
+        "按该 skill 定义的步骤执行并输出结果。"
+    )
+
+    env = build_child_env(binary)
+    env.setdefault("TERM", "dumb")
+    env.setdefault("NO_COLOR", "1")
+    env["HERMES_ACCEPT_HOOKS"] = "1"
+
+    # -z one-shot, --skills preloads the skill, --yolo auto-approves tool use
+    # so an interactive prompt never blocks the web request.
+    argv = [binary, "-z", prompt, "--skills", skill_basename, "--yolo"]
+    proc = await asyncio.create_subprocess_exec(
+        *argv, stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        cwd="/root", env=env,
+    )
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 600
+    read_task = asyncio.create_task(proc.stdout.read(4096))
+    got = False
+    try:
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                yield ("error", "执行超时（>600s）")
+                break
+            done, _ = await asyncio.wait([read_task], timeout=min(remaining, 30))
+            if not done:
+                if proc.returncode is not None:
+                    read_task.cancel()
+                    break
+                continue
+            chunk = read_task.result()
+            if not chunk:
+                break
+            text = _ANSI_RE.sub("", chunk.decode("utf-8", errors="replace"))
+            if text:
+                got = True
+                yield ("hermes", text)
+            read_task = asyncio.create_task(proc.stdout.read(4096))
+    finally:
+        if not read_task.done():
+            read_task.cancel()
+        if proc.returncode is None:
+            proc.kill()
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=5)
+            except Exception:
+                pass
+    if not got:
+        yield ("error", "skill 执行无输出（可能 skill 名不匹配或 hermes 配置异常）")
+
+
 @router.post("/run")
 async def run_tool(body: RunToolBody) -> StreamingResponse:
-    """Execute a skill with user-provided parameters via hermes agent."""
-    # Load skill
+    """Execute a skill with user-provided parameters via a real hermes agent."""
     try:
         detail = skill_repo.get_skill(body.skill_name)
     except Exception as exc:
         raise HTTPException(404, f"Skill not found: {exc}")
 
-    # Build prompt from skill body + user params
-    skill_body = detail.content_body
-    params_section = "\n".join(
-        f"- {k}: {v}" for k, v in body.params.items() if v
-    )
-
-    prompt = f"""请执行以下 Skill：
-
-## Skill: {detail.name}
-{skill_body}
-
-## 用户提供的参数
-{params_section if params_section else "（无额外参数）"}
-
-请按照 Skill 中的步骤执行，输出结果。"""
-
-    # Stream via hermes agent
-    from app.services import ai_synthesis_service
+    # hermes --skills expects the skill's basename (last path segment).
+    skill_basename = detail.name.rsplit("/", 1)[-1]
 
     async def generator():
         start = time.time()
         yield f'data: {json.dumps({"type": "phase", "phase": "executing"}, ensure_ascii=False)}\n\n'
         try:
-            async for prov, chunk in ai_synthesis_service.synthesize_native(
-                "keyword", prompt, "US"
-            ):
-                if prov == "_attempt":
-                    yield f'data: {json.dumps({"type": "attempt", "provider": chunk}, ensure_ascii=False)}\n\n'
-                elif prov == "error":
+            async for prov, chunk in _run_skill_agent(skill_basename, body.params, detail.content_body):
+                if prov == "error":
                     yield f'data: {json.dumps({"type": "error", "detail": chunk}, ensure_ascii=False)}\n\n'
                     return
-                else:
-                    yield f'data: {json.dumps({"type": "token", "text": chunk, "provider": prov}, ensure_ascii=False)}\n\n'
+                yield f'data: {json.dumps({"type": "token", "text": chunk, "provider": prov}, ensure_ascii=False)}\n\n'
             elapsed = round(time.time() - start, 1)
             yield f'data: {json.dumps({"type": "done", "provider": "hermes", "elapsed_s": elapsed}, ensure_ascii=False)}\n\n'
         except Exception as exc:

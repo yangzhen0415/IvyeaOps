@@ -432,6 +432,14 @@ def update_skill_md(name: str, frontmatter: dict, body: str) -> SkillMeta:
     ))
 
 
+def set_pinned(name: str, pinned: bool) -> SkillMeta:
+    """Toggle a skill's ``pinned`` flag in its frontmatter (drives the sidebar)."""
+    detail = get_skill(name)
+    fm = dict(detail.frontmatter or {})
+    fm["pinned"] = bool(pinned)
+    return update_skill_md(name, fm, detail.content_body)
+
+
 def write_file(name: str, rel_path: str, content: str) -> FileEntry:
     """Create or overwrite a file inside a skill. rel_path goes through _safe_path."""
     # SKILL.md must go through update_skill_md, not this generic writer.

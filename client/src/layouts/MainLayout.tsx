@@ -93,6 +93,29 @@ export default function MainLayout() {
   const navSections = NAV
     .map((sec) => ({ ...sec, items: sec.items.filter(canSee) }))
     .filter((sec) => sec.items.length > 0);
+
+  // Pinned skill tools → dynamic sidebar entries. Refreshed on mount and when
+  // a tool is pinned/unpinned (SkillTools dispatches 'opshub:pinned-changed').
+  const [pinnedTools, setPinnedTools] = useState<{ name: string; icon: string; label: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const { listPinnedTools } = await import("../api/skillTools");
+        const items = await listPinnedTools();
+        if (alive) setPinnedTools(items.map((t) => ({
+          name: t.name,
+          icon: t.icon || "⊞",
+          label: t.description_zh?.slice(0, 8) || t.name.split("/").pop() || t.name,
+        })));
+      } catch { /* ignore — sidebar still works without pinned tools */ }
+    };
+    load();
+    const onChange = () => load();
+    window.addEventListener("opshub:pinned-changed", onChange);
+    return () => { alive = false; window.removeEventListener("opshub:pinned-changed", onChange); };
+  }, []);
+
   const [termMounted, setTermMounted] = useState(false);
   const THEMES = [
     "dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light",
@@ -265,6 +288,29 @@ export default function MainLayout() {
               ))}
             </div>
           ))}
+          {pinnedTools.length > 0 && (
+            <div>
+              <div style={{ height: 1, background: "var(--b)", margin: "4px 12px" }} />
+              {!collapsed && <div style={{ fontSize: 9, color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
+              {pinnedTools.map((pt) => {
+                const to = `/skill-tools?tool=${encodeURIComponent(pt.name)}`;
+                const active = location.pathname === "/skill-tools" &&
+                  new URLSearchParams(location.search).get("tool") === pt.name;
+                return (
+                  <NavLink
+                    key={pt.name}
+                    to={to}
+                    className={"ni" + (active ? " active" : "")}
+                    title={collapsed ? pt.label : undefined}
+                    onClick={() => isMobile && setMobileMenu(false)}
+                  >
+                    <i className="ic">{pt.icon}</i>
+                    <span className="ni-label">{pt.label}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+          )}
         </nav>
         <div className="sb-bot">
           <div className="dot" />

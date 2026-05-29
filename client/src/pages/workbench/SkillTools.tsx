@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listTools, runTool, type SkillToolMeta, type SkillInput, type SseEvent } from "../../api/skillTools";
+import { useLocation } from "react-router-dom";
+import { listTools, runTool, pinTool, type SkillToolMeta, type SkillInput, type SseEvent } from "../../api/skillTools";
 
 export default function SkillTools() {
   const [tools, setTools] = useState<SkillToolMeta[]>([]);
@@ -8,6 +9,7 @@ export default function SkillTools() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeTool, setActiveTool] = useState<SkillToolMeta | null>(null);
+  const routerLoc = useLocation();
 
   const loadTools = useCallback(async () => {
     setLoading(true);
@@ -15,11 +17,29 @@ export default function SkillTools() {
       const res = await listTools(filterCat || undefined, search || undefined);
       setTools(res.tools);
       setCategories(res.categories);
+      // Deep-link: ?tool=<name> opens that tool directly (sidebar pinned entry).
+      const want = new URLSearchParams(window.location.search).get("tool");
+      if (want && !activeTool) {
+        const hit = res.tools.find((t) => t.name === want);
+        if (hit) setActiveTool(hit);
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [filterCat, search]);
 
   useEffect(() => { loadTools(); }, [loadTools]);
+
+  // React to sidebar deep-links: when ?tool= changes (or is cleared), open or
+  // close the matching tool even if the page is already mounted.
+  useEffect(() => {
+    const want = new URLSearchParams(routerLoc.search).get("tool");
+    if (!want) { setActiveTool(null); return; }
+    setTools((cur) => {
+      const hit = cur.find((t) => t.name === want);
+      if (hit) setActiveTool(hit);
+      return cur;
+    });
+  }, [routerLoc.search]);
 
   if (activeTool) {
     return (
@@ -174,10 +194,30 @@ function ToolPanel({ tool }: { tool: SkillToolMeta }) {
     }
   }, [tool, params, loading]);
 
+  const [pinned, setPinned] = useState(!!tool.pinned);
+  const [pinning, setPinning] = useState(false);
+  const togglePin = useCallback(async () => {
+    setPinning(true);
+    try {
+      const next = !pinned;
+      await pinTool(tool.name, next);
+      setPinned(next);
+      // Notify the sidebar to refresh its pinned entries immediately.
+      window.dispatchEvent(new CustomEvent("opshub:pinned-changed"));
+    } catch { /* ignore */ } finally { setPinning(false); }
+  }, [pinned, tool.name]);
+
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-        {tool.icon} {tool.name.split("/").pop()}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>
+          {tool.icon} {tool.name.split("/").pop()}
+        </div>
+        <button className="tbtn" onClick={togglePin} disabled={pinning}
+          style={{ fontSize: 10, color: pinned ? "var(--acc)" : "var(--t3)", borderColor: pinned ? "var(--acc)" : "var(--b)" }}
+          title={pinned ? "从侧边栏移除" : "固定到侧边栏作为独立工具"}>
+          {pinned ? "★ 已固定侧边栏" : "☆ 固定到侧边栏"}
+        </button>
       </div>
       <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 14 }}>
         {tool.description_zh || tool.description}

@@ -12,6 +12,7 @@ export interface SkillToolMeta {
   icon: string;
   inputs: SkillInput[];
   has_execution: boolean;
+  pinned?: boolean;
 }
 
 export interface SkillInput {
@@ -34,6 +35,16 @@ export async function listTools(category?: string, q?: string): Promise<SkillToo
   if (category) params.category = category;
   if (q) params.q = q;
   const { data } = await api.get("/skill-tools/list", { params });
+  return data;
+}
+
+export async function listPinnedTools(): Promise<SkillToolMeta[]> {
+  const { data } = await api.get("/skill-tools/pinned");
+  return data;
+}
+
+export async function pinTool(skillName: string, pinned: boolean): Promise<SkillToolMeta> {
+  const { data } = await api.post("/skill-tools/pin", { skill_name: skillName, pinned });
   return data;
 }
 
