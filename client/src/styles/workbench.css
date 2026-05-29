@@ -1879,6 +1879,15 @@ body::after{
 .hs-eye:hover{color:var(--t)}
 @media(max-width:600px){.hs-row3{grid-template-columns:1fr}.hs-page{padding:16px 14px 48px}}
 
+/* ── Freight quote tool ── */
+.fq-input{width:100%;background:var(--bg2);border:1px solid var(--b);color:var(--t);font-family:var(--font);font-size:12px;padding:7px 10px;border-radius:6px;outline:none;transition:border .12s;box-sizing:border-box}
+.fq-input:focus{border-color:var(--acc)}
+.fq-input::placeholder{color:var(--t3)}
+.fq-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
+.fq-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fq-field label{font-size:11px;color:var(--t3);font-family:var(--font);letter-spacing:.03em}
+.fq-form .tbtn{height:33px;padding:0 18px;font-size:12px}
+
 /* ── HealthPanel additions ── */
 .hs-health{background:var(--bg1);border:1px solid var(--b);border-radius:8px;overflow:hidden}
 .hs-health-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--b)}

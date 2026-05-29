@@ -192,51 +192,53 @@ export default function FreightQuote() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Input row */}
           <div style={{
-            background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 8, padding: "14px 16px",
-            display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap"
+            background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 8, padding: "16px",
           }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--font)" }}>FBA仓库代码</label>
-              <input
-                className="hub-input"
-                style={{ width: 120, textTransform: "uppercase", letterSpacing: "0.06em" }}
-                placeholder="如 ONT8"
-                value={warehouseCode}
-                onChange={e => setWarehouseCode(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && doSearch()}
-              />
+            <div className="fq-form">
+              <div className="fq-field">
+                <label>FBA 仓库代码</label>
+                <input
+                  className="fq-input"
+                  style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}
+                  placeholder="如 ONT8"
+                  value={warehouseCode}
+                  onChange={e => setWarehouseCode(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && doSearch()}
+                />
+              </div>
+              <div className="fq-field">
+                <label>重量 (KG)<span style={{ color: "var(--t3)", marginLeft: 4 }}>可选</span></label>
+                <input
+                  className="fq-input"
+                  type="number"
+                  placeholder="如 25"
+                  min="0"
+                  value={weightKg}
+                  onChange={e => setWeightKg(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && doSearch()}
+                />
+              </div>
+              <div className="fq-field">
+                <label>货代公司<span style={{ color: "var(--t3)", marginLeft: 4 }}>可选</span></label>
+                <input
+                  className="fq-input"
+                  placeholder="筛选公司名"
+                  value={companyFilter}
+                  onChange={e => setCompanyFilter(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && doSearch()}
+                />
+              </div>
+              <div className="fq-field">
+                <button
+                  className="tbtn acc"
+                  onClick={doSearch}
+                  disabled={searching || !warehouseCode.trim()}
+                  style={{ width: "100%" }}
+                >
+                  {searching ? "查询中…" : "查价"}
+                </button>
+              </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--font)" }}>重量 (KG, 可选)</label>
-              <input
-                className="hub-input"
-                style={{ width: 90 }}
-                type="number"
-                placeholder="如 25"
-                min="0"
-                value={weightKg}
-                onChange={e => setWeightKg(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && doSearch()}
-              />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--font)" }}>货代公司 (可选)</label>
-              <input
-                className="hub-input"
-                style={{ width: 140 }}
-                placeholder="筛选公司名"
-                value={companyFilter}
-                onChange={e => setCompanyFilter(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && doSearch()}
-              />
-            </div>
-            <button
-              className="tbtn acc"
-              onClick={doSearch}
-              disabled={searching || !warehouseCode.trim()}
-            >
-              {searching ? "查询中…" : "查价"}
-            </button>
           </div>
 
           {/* Error */}
@@ -333,20 +335,22 @@ export default function FreightQuote() {
           </div>
 
           {/* Upload options */}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--font)" }}>默认货代公司（可选）</label>
-              <input className="hub-input" placeholder="如：万路达" value={uploadCompany}
-                onChange={e => setUploadCompany(e.target.value)} style={{ width: 160 }} />
+          <div className="fq-form">
+            <div className="fq-field">
+              <label>默认货代公司<span style={{ color: "var(--t3)", marginLeft: 4 }}>可选</span></label>
+              <input className="fq-input" placeholder="如：万路达" value={uploadCompany}
+                onChange={e => setUploadCompany(e.target.value)} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--font)" }}>市场（可选）</label>
-              <input className="hub-input" placeholder="如：美国" value={uploadMarket}
-                onChange={e => setUploadMarket(e.target.value)} style={{ width: 100 }} />
+            <div className="fq-field">
+              <label>市场<span style={{ color: "var(--t3)", marginLeft: 4 }}>可选</span></label>
+              <input className="fq-input" placeholder="如：美国" value={uploadMarket}
+                onChange={e => setUploadMarket(e.target.value)} />
             </div>
-            <button className="tbtn" onClick={doRebuild} disabled={rebuilding}>
-              {rebuilding ? "重建中…" : "🔄 重建索引"}
-            </button>
+            <div className="fq-field">
+              <button className="tbtn" onClick={doRebuild} disabled={rebuilding} style={{ width: "100%" }}>
+                {rebuilding ? "重建中…" : "🔄 重建索引"}
+              </button>
+            </div>
           </div>
 
           {uploading && (
