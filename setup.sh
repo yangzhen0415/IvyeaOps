@@ -185,9 +185,9 @@ install_gbrain() {
     # Optional: local semantic-search embedding via Ollama (free, offline).
     # Without it GBrain falls back to keyword search — usable but no semantic.
     echo ""
-    read -p "  Enable GBrain semantic search via local Ollama? (downloads ~400MB) (y/n) " -n 1 -r
+    read -p "  Enable GBrain semantic search via local Ollama? (downloads ~400MB) [Y/n] " -n 1 -r
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         setup_gbrain_embedding
     else
         warn "Skipping semantic search. GBrain will use keyword search only."
@@ -367,9 +367,9 @@ if has hermes; then
     ok "Hermes found ($(hermes --version 2>/dev/null | head -1))"
 else
     warn "Hermes not found."
-    read -p "  Install Hermes? (recommended for full AI features) (y/n) " -n 1 -r
+    read -p "  Install Hermes? (recommended for full AI features) [Y/n] " -n 1 -r
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         install_hermes
     else
         warn "Skipping Hermes. Some AI features will be limited."
@@ -389,9 +389,9 @@ if has gbrain; then
     fi
 else
     warn "GBrain not found."
-    read -p "  Install GBrain (personal knowledge base, recommended)? (y/n) " -n 1 -r
+    read -p "  Install GBrain (personal knowledge base, recommended)? [Y/n] " -n 1 -r
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         install_gbrain
     else
         warn "Skipping GBrain. Knowledge base features will be unavailable."
