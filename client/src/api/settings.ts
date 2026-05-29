@@ -1,11 +1,20 @@
 import { api } from "./client";
 
 export interface HubSettings {
-  // AI synthesis
+  // Hermes LLM — primary model (synced to ~/.hermes/config.yaml + .env)
+  hermes_provider: string;
+  hermes_model: string;
+  hermes_api_key: string;
+  hermes_base_url: string;
+  // Hermes LLM — fallback model
+  hermes_fallback_provider: string;
+  hermes_fallback_model: string;
+  hermes_fallback_api_key: string;
+  hermes_fallback_base_url: string;
+  // AI synthesis (Apimart for images)
   apimart_key: string;
   apimart_base: string;
-  // Comma-separated text-AI fallback order. Apimart not included by default
-  // because most Apimart keys only grant image models, not Claude text.
+  // Comma-separated text-AI fallback order for ops-hub internal synthesis
   text_ai_providers: string;
   // Market data
   sorftime_key: string;

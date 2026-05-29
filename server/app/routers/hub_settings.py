@@ -16,11 +16,17 @@ router = APIRouter()
 
 _SECRET_KEYS: List[str] = [
     "apimart_key", "sorftime_key", "sif_key", "sellersprite_key",
+    "hermes_api_key", "hermes_fallback_api_key",
     "alert_app_secret", "alert_webhook", "openai_api_key",
 ]
 
 # Keys that, when changed, require syncing into Hermes config.
-_HERMES_SYNC_KEYS = {"sorftime_key", "sif_key", "sellersprite_key"}
+_HERMES_SYNC_KEYS = {
+    "sorftime_key", "sif_key", "sellersprite_key",
+    "hermes_provider", "hermes_model", "hermes_api_key", "hermes_base_url",
+    "hermes_fallback_provider", "hermes_fallback_model",
+    "hermes_fallback_api_key", "hermes_fallback_base_url",
+}
 
 
 class SettingsPatch(BaseModel):

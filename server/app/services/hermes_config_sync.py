@@ -1,14 +1,13 @@
-"""Sync ops-hub data-source keys into Hermes config + register MCP servers.
+"""Sync ops-hub settings into Hermes config files.
 
 Called whenever hub_settings are saved. Idempotent — safe to call repeatedly.
 
 Responsibilities:
-  1. Sorftime / SIF key  → update mcp_servers.sorftime.url query param AND
-                            mcp_servers.sif_mcp.headers.Authorization
-  2. SellerSprite key    → add/update mcp_servers.sellersprite (stdio MCP)
-  3. If a key is cleared → leave the MCP entry but blank the credential so
-                            Hermes will skip it gracefully (don't delete the
-                            entry to avoid losing other config the user set).
+  1. LLM model config  → config.yaml model + fallback_providers
+                          + ~/.hermes/.env API key variables
+  2. Sorftime key      → mcp_servers.sorftime URL query param
+  3. SIF key           → mcp_servers.sif_mcp Bearer token
+  4. SellerSprite key  → mcp_servers.sellersprite (stdio MCP)
 """
 from __future__ import annotations
 
@@ -21,8 +20,24 @@ from typing import Any, Dict
 import yaml  # PyYAML — available in the ops-hub venv
 
 
-_HERMES_CFG = Path.home() / ".hermes" / "config.yaml"
+_HERMES_CFG  = Path.home() / ".hermes" / "config.yaml"
+_HERMES_ENV  = Path.home() / ".hermes" / ".env"
 _MCP_SCRIPT  = Path(__file__).resolve().parents[2] / "tools" / "sellersprite_mcp.py"
+
+# Map provider id → (env_var_name, default_base_url)
+_PROVIDER_ENV: Dict[str, tuple[str, str]] = {
+    "deepseek":   ("DEEPSEEK_API_KEY",               "https://api.deepseek.com/v1"),
+    "anthropic":  ("ANTHROPIC_API_KEY",              ""),
+    "openai":     ("OPENAI_API_KEY",                 "https://api.openai.com/v1"),
+    "openrouter": ("OPENROUTER_API_KEY",             "https://openrouter.ai/api/v1"),
+    "google":     ("GOOGLE_GENERATIVE_AI_API_KEY",   ""),
+    "groq":       ("GROQ_API_KEY",                   "https://api.groq.com/openai/v1"),
+    "together":   ("TOGETHER_API_KEY",               "https://api.together.xyz/v1"),
+    "minimax":    ("MINIMAX_API_KEY",                ""),
+    "zhipu":      ("ZHIPUAI_API_KEY",                ""),
+    "kimi":       ("KIMI_API_KEY",                   "https://api.kimi.com/coding/v1"),
+    "custom":     ("",                               ""),
+}
 
 
 # ── YAML helpers (round-trip preserving comments as best as PyYAML can) ──────
@@ -88,17 +103,146 @@ def sync_sellersprite(key: str) -> None:
 
 
 def _python_bin() -> str:
-    """Return the Python interpreter that can run the MCP server."""
-    # Prefer the same interpreter running this module.
     return os.environ.get("OPSHUB_PYTHON", "python3")
 
 
+def _read_env_file() -> Dict[str, str]:
+    """Parse ~/.hermes/.env into a dict (skip comments and blanks)."""
+    result: Dict[str, str] = {}
+    if not _HERMES_ENV.exists():
+        return result
+    for line in _HERMES_ENV.read_text("utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            k, _, v = line.partition("=")
+            result[k.strip()] = v.strip()
+    return result
+
+
+def _write_env_file(env: Dict[str, str]) -> None:
+    """Write back ~/.hermes/.env preserving comments; update/add key=value lines."""
+    if not _HERMES_ENV.exists():
+        _HERMES_ENV.parent.mkdir(parents=True, exist_ok=True)
+        lines: list[str] = []
+    else:
+        lines = _HERMES_ENV.read_text("utf-8").splitlines()
+
+    written = set()
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped:
+            new_lines.append(line)
+            continue
+        if "=" in stripped:
+            k = stripped.partition("=")[0].strip()
+            if k in env:
+                new_lines.append(f"{k}={env[k]}")
+                written.add(k)
+                continue
+        new_lines.append(line)
+
+    # Append keys not already in the file
+    for k, v in env.items():
+        if k not in written:
+            new_lines.append(f"{k}={v}")
+
+    tmp = _HERMES_ENV.with_suffix(".env.tmp")
+    tmp.write_text("\n".join(new_lines) + "\n", "utf-8")
+    tmp.replace(_HERMES_ENV)
+
+
+def sync_llm_model(
+    provider: str, model: str, api_key: str, base_url: str,
+    fallback_provider: str = "", fallback_model: str = "",
+    fallback_api_key: str = "", fallback_base_url: str = "",
+) -> None:
+    """Write primary + fallback model config into config.yaml and .env."""
+    provider = provider.strip()
+    model    = model.strip()
+    api_key  = api_key.strip()
+    base_url = base_url.strip()
+
+    if not provider:
+        return  # nothing to write
+
+    # ── 1. Write API key into ~/.hermes/.env ──────────────────────────────────
+    env_updates: Dict[str, str] = {}
+    env_info = _PROVIDER_ENV.get(provider, ("", ""))
+    env_var = env_info[0]
+    default_base = env_info[1]
+
+    if env_var and api_key:
+        env_updates[env_var] = api_key
+
+    # Fallback key
+    if fallback_provider:
+        fb_env_info = _PROVIDER_ENV.get(fallback_provider.strip(), ("", ""))
+        fb_env_var  = fb_env_info[0]
+        if fb_env_var and fallback_api_key.strip():
+            env_updates[fb_env_var] = fallback_api_key.strip()
+
+    if env_updates:
+        _write_env_file(env_updates)
+
+    # ── 2. Write model + base_url into config.yaml ────────────────────────────
+    cfg = _load()
+
+    # Primary model
+    effective_base = base_url or default_base
+    cfg["model"] = {
+        "default": model,
+        "provider": provider,
+        **({"base_url": effective_base} if effective_base else {}),
+    }
+
+    # Fallback providers list
+    if fallback_provider:
+        fb_info  = _PROVIDER_ENV.get(fallback_provider.strip(), ("", ""))
+        fb_base  = (fallback_base_url.strip() or fb_info[1])
+        fb_entry: Dict[str, str] = {
+            "provider": fallback_provider.strip(),
+            "model":    fallback_model.strip(),
+        }
+        if fb_base:
+            fb_entry["base_url"] = fb_base
+        cfg["fallback_providers"] = [fb_entry]
+    else:
+        cfg.setdefault("fallback_providers", [])
+
+    _save(cfg)
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
+
+_LLM_KEYS = {
+    "hermes_provider", "hermes_model", "hermes_api_key", "hermes_base_url",
+    "hermes_fallback_provider", "hermes_fallback_model",
+    "hermes_fallback_api_key", "hermes_fallback_base_url",
+}
+
 
 def on_settings_saved(updates: Dict[str, Any]) -> None:
     """Called after hub_settings.save() with the full updated settings dict."""
     import logging
     _log = logging.getLogger(__name__)
+
+    if _LLM_KEYS & updates.keys():
+        try:
+            sync_llm_model(
+                provider         = updates.get("hermes_provider", ""),
+                model            = updates.get("hermes_model", ""),
+                api_key          = updates.get("hermes_api_key", ""),
+                base_url         = updates.get("hermes_base_url", ""),
+                fallback_provider = updates.get("hermes_fallback_provider", ""),
+                fallback_model   = updates.get("hermes_fallback_model", ""),
+                fallback_api_key = updates.get("hermes_fallback_api_key", ""),
+                fallback_base_url = updates.get("hermes_fallback_base_url", ""),
+            )
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("hermes llm sync failed: %s", exc)
 
     if "sorftime_key" in updates:
         try:

@@ -196,6 +196,101 @@ function SecretInput({ value, onChange, placeholder }: { value: string; onChange
   );
 }
 
+// ── LLM model block ───────────────────────────────────────────────────────────
+
+const PROVIDERS: { id: string; label: string; defaultModel: string; envVar: string }[] = [
+  { id: "deepseek",   label: "DeepSeek",    defaultModel: "deepseek-chat",          envVar: "DEEPSEEK_API_KEY" },
+  { id: "anthropic",  label: "Anthropic",   defaultModel: "claude-sonnet-4-6",      envVar: "ANTHROPIC_API_KEY" },
+  { id: "openai",     label: "OpenAI",      defaultModel: "gpt-4o",                 envVar: "OPENAI_API_KEY" },
+  { id: "openrouter", label: "OpenRouter",  defaultModel: "anthropic/claude-sonnet-4-6", envVar: "OPENROUTER_API_KEY" },
+  { id: "google",     label: "Google",      defaultModel: "gemini-2.0-flash",       envVar: "GOOGLE_GENERATIVE_AI_API_KEY" },
+  { id: "groq",       label: "Groq",        defaultModel: "llama-3.3-70b-versatile", envVar: "GROQ_API_KEY" },
+  { id: "together",   label: "Together AI", defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo", envVar: "TOGETHER_API_KEY" },
+  { id: "kimi",       label: "Kimi / Moonshot", defaultModel: "kimi-k2.5",          envVar: "KIMI_API_KEY" },
+  { id: "minimax",    label: "MiniMax",     defaultModel: "mimo-v2.5-pro",          envVar: "MINIMAX_CN_API_KEY" },
+  { id: "custom",     label: "自定义（OpenAI 兼容）", defaultModel: "",             envVar: "" },
+];
+
+function LLMModelBlock({
+  title, hint,
+  providerKey, modelKey, apiKeyKey, baseUrlKey,
+  vals, set,
+}: {
+  title: string; hint?: string;
+  providerKey: keyof HubSettings; modelKey: keyof HubSettings;
+  apiKeyKey: keyof HubSettings; baseUrlKey: keyof HubSettings;
+  vals: HubSettings;
+  set: <K extends keyof HubSettings>(k: K, v: HubSettings[K]) => void;
+}) {
+  const provider = (vals[providerKey] as string) || "";
+  const model    = (vals[modelKey]    as string) || "";
+  const apiKey   = (vals[apiKeyKey]   as string) || "";
+  const baseUrl  = (vals[baseUrlKey]  as string) || "";
+
+  const info = PROVIDERS.find(p => p.id === provider);
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600, marginBottom: 8 }}>
+        {title}
+        {hint && <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 8 }}>{hint}</span>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div>
+          <div className="hs-label" style={{ fontSize: 10, marginBottom: 3 }}>Provider</div>
+          <select
+            className="hs-input"
+            value={provider}
+            onChange={e => {
+              const p = e.target.value;
+              set(providerKey, p as HubSettings[typeof providerKey]);
+              const pInfo = PROVIDERS.find(x => x.id === p);
+              if (pInfo && !model) {
+                set(modelKey, pInfo.defaultModel as HubSettings[typeof modelKey]);
+              }
+            }}
+          >
+            <option value="">-- 选择 provider --</option>
+            {PROVIDERS.map(p => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="hs-label" style={{ fontSize: 10, marginBottom: 3 }}>
+            Model {info && <span style={{ color: "var(--t3)" }}>({info.envVar || "自定义"})</span>}
+          </div>
+          <TxtInput
+            value={model}
+            onChange={v => set(modelKey, v as HubSettings[typeof modelKey])}
+            placeholder={info?.defaultModel || "模型名称"}
+          />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+        <div>
+          <div className="hs-label" style={{ fontSize: 10, marginBottom: 3 }}>API Key</div>
+          <SecretInput
+            value={apiKey}
+            onChange={v => set(apiKeyKey, v as HubSettings[typeof apiKeyKey])}
+            placeholder={info?.envVar ? `${info.envVar}` : "API Key"}
+          />
+        </div>
+        <div>
+          <div className="hs-label" style={{ fontSize: 10, marginBottom: 3 }}>
+            Base URL <span style={{ color: "var(--t3)" }}>（默认留空）</span>
+          </div>
+          <TxtInput
+            value={baseUrl}
+            onChange={v => set(baseUrlKey, v as HubSettings[typeof baseUrlKey])}
+            placeholder="留空 = 使用 provider 默认地址"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Health panel (simplified) ─────────────────────────────────────────────────
 
 function HealthPanel() {
@@ -340,6 +435,9 @@ function AdvancedBlock({ children }: { children: React.ReactNode }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const EMPTY: HubSettings = {
+  hermes_provider: "", hermes_model: "", hermes_api_key: "", hermes_base_url: "",
+  hermes_fallback_provider: "", hermes_fallback_model: "",
+  hermes_fallback_api_key: "", hermes_fallback_base_url: "",
   apimart_key: "", apimart_base: "https://api.apimart.ai/v1",
   text_ai_providers: "hermes,codex,claude",
   sorftime_key: "", sif_key: "", sellersprite_key: "",
@@ -446,7 +544,34 @@ export default function HubSettings() {
         </Field>
       </Section>
 
-      {/* -- 区块 2: 智能体 -- */}
+      {/* -- 区块 2: 大模型 -- */}
+      <Section
+        title="大模型"
+        desc="配置 Hermes 使用的主模型和 fallback 模型。保存后立即生效，下次调用 hermes 时自动使用新配置。"
+        keys={[
+          "hermes_provider", "hermes_model", "hermes_api_key", "hermes_base_url",
+          "hermes_fallback_provider", "hermes_fallback_model",
+          "hermes_fallback_api_key", "hermes_fallback_base_url",
+        ]}
+        vals={vals} onSave={save}
+      >
+        <LLMModelBlock
+          title="主模型"
+          providerKey="hermes_provider" modelKey="hermes_model"
+          apiKeyKey="hermes_api_key" baseUrlKey="hermes_base_url"
+          vals={vals} set={set}
+        />
+        <div style={{ borderTop: "1px solid var(--b)", margin: "12px 0" }} />
+        <LLMModelBlock
+          title="Fallback 模型（可选）"
+          hint="主模型限流或报错时自动切换到这里"
+          providerKey="hermes_fallback_provider" modelKey="hermes_fallback_model"
+          apiKeyKey="hermes_fallback_api_key" baseUrlKey="hermes_fallback_base_url"
+          vals={vals} set={set}
+        />
+      </Section>
+
+      {/* -- 区块 3: 智能体 -- */}
       <Section
         title="智能体"
         desc={<>Hermes、Claude、GBrain 均从系统 PATH <strong>自动发现</strong>，绿色即代表可用，无需手动配置路径。</>}

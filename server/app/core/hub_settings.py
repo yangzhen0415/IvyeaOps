@@ -22,6 +22,18 @@ _DEFAULTS: Dict[str, Any] = {
     # here only if your key has access to Claude text models.
     # Valid values: hermes, codex, claude, apimart
     "text_ai_providers": "hermes,codex,claude",
+    # Hermes LLM — primary model (written to ~/.hermes/.env + config.yaml)
+    # provider: deepseek | anthropic | openai | openrouter | google | groq | together | custom
+    # Saving any of these auto-syncs into Hermes config; no gateway restart needed.
+    "hermes_provider": "",
+    "hermes_model": "",
+    "hermes_api_key": "",
+    "hermes_base_url": "",   # leave empty to use provider default
+    # Hermes LLM — fallback model (used when primary is rate-limited / down)
+    "hermes_fallback_provider": "",
+    "hermes_fallback_model": "",
+    "hermes_fallback_api_key": "",
+    "hermes_fallback_base_url": "",
     # Market data
     "sorftime_key": "",      # sorftime.com — 市场调研、关键词趋势
     "sif_key": "",           # sif.com — 深度分析工具箱（独立账号和 key）
