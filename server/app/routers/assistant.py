@@ -13,10 +13,38 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.core import hub_settings as _hs
 from app.core.security import require_user
 from app.services.ai_synthesis_service import _apimart_base, _apimart_key, _deepseek_key
 
 router = APIRouter()
+
+
+# OpenAI-compatible base URLs per provider (for the user-configurable
+# AI-chat panel). Anthropic-style providers handled separately.
+_CHAT_PROVIDER_BASE = {
+    "deepseek":   "https://api.deepseek.com",
+    "openai":     "https://api.openai.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "groq":       "https://api.groq.com/openai/v1",
+    "together":   "https://api.together.xyz/v1",
+    "xiaomi":     "https://token-plan-sgp.xiaomimimo.com/v1",
+    "kimi":       "https://api.kimi.com/coding/v1",
+}
+
+
+def _assistant_cfg() -> dict:
+    """Return the user-configured AI-chat model, or {} to use the default chain."""
+    cfg = _hs.load()
+    provider = (cfg.get("assistant_provider") or "").strip()
+    if not provider:
+        return {}
+    return {
+        "provider": provider,
+        "model":    (cfg.get("assistant_model") or "").strip(),
+        "api_key":  (cfg.get("assistant_api_key") or "").strip(),
+        "base_url": (cfg.get("assistant_base_url") or "").strip(),
+    }
 
 
 class Msg(BaseModel):
@@ -90,12 +118,91 @@ async def _apimart_chat(messages: List[Msg]) -> AsyncGenerator[str, None]:
                         yield t
 
 
+async def _configured_chat(cfg: dict, messages: List[Msg]) -> AsyncGenerator[str, None]:
+    """Stream from a user-configured OpenAI-compatible chat endpoint."""
+    provider = cfg["provider"]
+    key = cfg["api_key"]
+    if not key:
+        raise RuntimeError(f"{provider} key 未配置")
+    if provider == "anthropic":
+        # Anthropic-native API (messages endpoint)
+        base = cfg["base_url"] or "https://api.anthropic.com/v1"
+        system = " ".join(m.content for m in messages if m.role == "system")
+        msgs = [{"role": m.role, "content": m.content} for m in messages if m.role in ("user", "assistant")]
+        payload = {"model": cfg["model"] or "claude-sonnet-4-6", "max_tokens": 4096, "messages": msgs, "stream": True}
+        if system:
+            payload["system"] = system
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as c:
+            async with c.stream("POST", f"{base}/messages", json=payload,
+                                headers={"Authorization": f"Bearer {key}", "anthropic-version": "2023-06-01"}) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        ev = json.loads(line[5:].strip())
+                    except Exception:
+                        continue
+                    if ev.get("type") == "content_block_delta":
+                        t = ev.get("delta", {}).get("text", "")
+                        if t:
+                            yield t
+        return
+    # OpenAI-compatible (deepseek/openai/openrouter/groq/together/xiaomi/kimi/custom)
+    base = cfg["base_url"] or _CHAT_PROVIDER_BASE.get(provider, "")
+    if not base:
+        raise RuntimeError(f"{provider} 需要填写 Base URL")
+    payload = {
+        "model": cfg["model"] or "",
+        "messages": [{"role": m.role, "content": m.content} for m in messages],
+        "stream": True, "max_tokens": 4096,
+    }
+    async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as c:
+        async with c.stream("POST", f"{base.rstrip('/')}/chat/completions",
+                            json=payload, headers={"Authorization": f"Bearer {key}"}) as r:
+            r.raise_for_status()
+            async for line in r.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if raw == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(raw)
+                except Exception:
+                    continue
+                choices = ev.get("choices", [])
+                if choices:
+                    t = choices[0].get("delta", {}).get("content", "")
+                    if t:
+                        yield t
+
+
 @router.post("/chat")
 async def chat(req: ChatReq, _user: str = Depends(require_user)) -> StreamingResponse:
     if not req.messages:
         raise HTTPException(400, "messages cannot be empty")
 
+    cfg = _assistant_cfg()
+
     async def gen() -> AsyncGenerator[str, None]:
+        # User-configured model takes priority; no silent fallback so the user
+        # sees real errors from their chosen provider.
+        if cfg:
+            provider = cfg["provider"]
+            try:
+                got = False
+                async for t in _configured_chat(cfg, req.messages):
+                    got = True
+                    yield _sse({"type": "token", "text": t, "provider": provider})
+                if got:
+                    yield _sse({"type": "done", "provider": provider})
+                    return
+            except Exception as e:
+                yield _sse({"type": "error", "detail": f"{provider}: {e}"})
+                return
+
+        # No explicit config → default deepseek → apimart chain.
         last_err = None
         for provider, fn in (("deepseek", _deepseek_chat), ("apimart", _apimart_chat)):
             got = False
@@ -121,19 +228,30 @@ class ImageReq(BaseModel):
     n: int = 1
 
 
+def _image_cfg() -> dict:
+    """Image-gen model/key/base, falling back to apimart defaults."""
+    cfg = _hs.load()
+    return {
+        "model":    (cfg.get("image_model") or "").strip() or "gpt-image-2",
+        "api_key":  (cfg.get("image_api_key") or "").strip() or _apimart_key(),
+        "base_url": (cfg.get("image_base_url") or "").strip() or _apimart_base(),
+    }
+
+
 @router.post("/image")
 async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dict:
-    """Submit an apimart gpt-image-2 job (async). Returns a task_id the client
-    then polls via /image/status (generation takes ~60s)."""
-    key = _apimart_key()
+    """Submit an image-gen job (async). Returns a task_id the client then polls
+    via /image/status (generation takes ~60s)."""
+    ic = _image_cfg()
+    key = ic["api_key"]
     if not key:
-        raise HTTPException(400, "Apimart key 未配置（系统配置 → AI 服务）")
+        raise HTTPException(400, "生图 key 未配置（系统配置 → 应用模型 → AI 生图）")
     if not req.prompt.strip():
         raise HTTPException(400, "提示词不能为空")
-    payload = {"model": "gpt-image-2", "prompt": req.prompt, "n": min(max(req.n, 1), 4), "size": req.size}
+    payload = {"model": ic["model"], "prompt": req.prompt, "n": min(max(req.n, 1), 4), "size": req.size}
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as c:
-            r = await c.post(f"{_apimart_base()}/images/generations", json=payload,
+            r = await c.post(f"{ic['base_url']}/images/generations", json=payload,
                              headers={"Authorization": f"Bearer {key}"})
     except Exception as e:
         raise HTTPException(502, f"生图请求失败：{e}")
@@ -148,12 +266,13 @@ async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dic
 
 @router.get("/image/status")
 async def image_status(task_id: str, _user: str = Depends(require_user)) -> dict:
-    key = _apimart_key()
+    ic = _image_cfg()
+    key = ic["api_key"]
     if not key:
-        raise HTTPException(400, "Apimart key 未配置")
+        raise HTTPException(400, "生图 key 未配置")
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as c:
-            r = await c.get(f"{_apimart_base()}/tasks/{task_id}", headers={"Authorization": f"Bearer {key}"})
+            r = await c.get(f"{ic['base_url']}/tasks/{task_id}", headers={"Authorization": f"Bearer {key}"})
     except Exception as e:
         raise HTTPException(502, f"查询失败：{e}")
     if r.status_code >= 400:
@@ -175,4 +294,12 @@ async def image_status(task_id: str, _user: str = Depends(require_user)) -> dict
 
 @router.get("/status")
 def status(_user: str = Depends(require_user)) -> dict:
-    return {"deepseek": bool(_deepseek_key()), "apimart": bool(_apimart_key())}
+    cfg = _assistant_cfg()
+    ic = _image_cfg()
+    return {
+        "deepseek": bool(_deepseek_key()),
+        "apimart": bool(_apimart_key()),
+        "chat_configured": bool(cfg),
+        "chat_provider": cfg.get("provider", "") if cfg else "",
+        "image_ready": bool(ic["api_key"]),
+    }

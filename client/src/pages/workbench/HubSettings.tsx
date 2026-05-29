@@ -550,6 +550,8 @@ const EMPTY: HubSettings = {
   hermes_provider: "", hermes_model: "", hermes_api_key: "", hermes_base_url: "",
   hermes_fallback_provider: "", hermes_fallback_model: "",
   hermes_fallback_api_key: "", hermes_fallback_base_url: "",
+  assistant_provider: "", assistant_model: "", assistant_api_key: "", assistant_base_url: "",
+  image_model: "", image_api_key: "", image_base_url: "",
   apimart_key: "", apimart_base: "https://api.apimart.ai/v1",
   text_ai_providers: "hermes,codex,claude",
   sorftime_key: "", sif_key: "", sellersprite_key: "",
@@ -681,6 +683,41 @@ export default function HubSettings() {
           apiKeyKey="hermes_fallback_api_key" baseUrlKey="hermes_fallback_base_url"
           vals={vals} set={set}
         />
+      </Section>
+
+      {/* -- 应用模型：AI 问答 / AI 生图（直连大模型，不走智能体）-- */}
+      <Section
+        title="应用模型"
+        desc={<>「AI 问答」和「AI 生图」直接调大模型 API，<strong>不经过智能体</strong>。留空则 AI 问答回退默认链路（DeepSeek→Apimart），生图回退 Apimart。</>}
+        keys={[
+          "assistant_provider", "assistant_model", "assistant_api_key", "assistant_base_url",
+          "image_model", "image_api_key", "image_base_url",
+        ]}
+        vals={vals} onSave={save}
+      >
+        <LLMModelBlock
+          title="AI 问答"
+          hint="留空用默认 DeepSeek→Apimart"
+          providerKey="assistant_provider" modelKey="assistant_model"
+          apiKeyKey="assistant_api_key" baseUrlKey="assistant_base_url"
+          vals={vals} set={set}
+        />
+        <div style={{ borderTop: "1px solid var(--b)", margin: "12px 0" }} />
+        <div style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600, marginBottom: 10 }}>
+          AI 生图
+          <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 8 }}>留空用默认 Apimart gpt-image-2</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <Field label="模型名称">
+            <TxtInput value={vals.image_model} onChange={v => set("image_model", v)} placeholder="gpt-image-2" />
+          </Field>
+          <Field label="API Key" hint="留空复用 Apimart key">
+            <SecretInput value={vals.image_api_key} onChange={v => set("image_api_key", v)} placeholder="留空 = 复用 Apimart key" />
+          </Field>
+          <Field label="Base URL" hint="留空复用 Apimart 地址">
+            <TxtInput value={vals.image_base_url} onChange={v => set("image_base_url", v)} placeholder="留空 = 复用 Apimart 地址" />
+          </Field>
+        </div>
       </Section>
 
       {/* -- 区块 3: 智能体 -- */}

@@ -34,6 +34,16 @@ _DEFAULTS: Dict[str, Any] = {
     "hermes_fallback_model": "",
     "hermes_fallback_api_key": "",
     "hermes_fallback_base_url": "",
+    # AI 问答（直连大模型，不走智能体）— leave empty to fall back to
+    # the default deepseek→apimart chain.
+    "assistant_provider": "",     # deepseek | anthropic | openai | openrouter | ...
+    "assistant_model": "",
+    "assistant_api_key": "",
+    "assistant_base_url": "",
+    # AI 生图（默认 Apimart gpt-image-2）— leave empty to use apimart_key.
+    "image_model": "",            # default gpt-image-2
+    "image_api_key": "",          # empty = reuse apimart_key
+    "image_base_url": "",         # empty = reuse apimart_base
     # Market data
     "sorftime_key": "",      # sorftime.com — 市场调研、关键词趋势
     "sif_key": "",           # sif.com — 深度分析工具箱（独立账号和 key）

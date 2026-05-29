@@ -11,6 +11,15 @@ export interface HubSettings {
   hermes_fallback_model: string;
   hermes_fallback_api_key: string;
   hermes_fallback_base_url: string;
+  // AI 问答（直连大模型，不走智能体）
+  assistant_provider: string;
+  assistant_model: string;
+  assistant_api_key: string;
+  assistant_base_url: string;
+  // AI 生图
+  image_model: string;
+  image_api_key: string;
+  image_base_url: string;
   // AI synthesis (Apimart for images)
   apimart_key: string;
   apimart_base: string;
