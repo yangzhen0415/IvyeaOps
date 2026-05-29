@@ -567,35 +567,54 @@ def _claude_projects() -> _Path | None:
 _LOCAL_TZ = _timezone(_timedelta(hours=8))
 _KIRO_DEFAULT_CONTEXT_TOKENS = 200_000
 
-# Pricing per 1M tokens (input, output) in USD
+# Pricing per 1M tokens (input, output) in USD. Keys are lowercase.
 _PRICING = {
-    "claude-opus-4-7": (15, 75), "claude-opus-4-6": (15, 75), "claude-opus-4.5": (15, 75),
-    "claude-sonnet-4-6": (3, 15), "claude-sonnet-4": (3, 15), "claude-sonnet-4.5": (3, 15),
-    "claude-3.7-sonnet": (3, 15),
-    "claude-haiku-4.5": (0.8, 4),
-    "gpt-5.5": (2, 10), "gpt-5.4": (2, 10),
+    # Anthropic Claude
+    "claude-opus-4-8": (15, 75), "claude-opus-4-7": (15, 75), "claude-opus-4-6": (15, 75),
+    "claude-opus-4.5": (15, 75), "claude-opus-4": (15, 75),
+    "claude-sonnet-4-6": (3, 15), "claude-sonnet-4-5": (3, 15), "claude-sonnet-4": (3, 15),
+    "claude-sonnet-4.5": (3, 15), "claude-3.7-sonnet": (3, 15), "claude-3-5-sonnet": (3, 15),
+    "claude-haiku-4-5": (0.8, 4), "claude-haiku-4.5": (0.8, 4), "claude-3-5-haiku": (0.8, 4),
+    # OpenAI
+    "gpt-5.5": (2, 10), "gpt-5.4": (2, 10), "gpt-5": (2, 10),
+    "gpt-4o": (2.5, 10), "gpt-4o-mini": (0.15, 0.6), "o3": (2, 8), "o4-mini": (1.1, 4.4),
     "gpt-image-2": (0, 0),  # per-image pricing, not token-based
-    "deepseek-chat": (0.27, 1.1), "deepseek-3.2": (0.27, 1.1),
-    "MiniMax-M2.7": (0.5, 2), "minimax/minimax-m2.7": (0.5, 2),
-    "moonshotai/kimi-k2.6": (1, 4), "kimi-k2.6": (1, 4),
-    "mimo-v2.5-pro": (0.3, 1.2),
-    "qwen3-coder-next": (0.5, 2),
+    # DeepSeek
+    "deepseek-chat": (0.27, 1.1), "deepseek-reasoner": (0.55, 2.19), "deepseek-3.2": (0.27, 1.1),
+    # MiniMax
+    "minimax-m2.7": (0.5, 2), "minimax/minimax-m2.7": (0.5, 2), "minimax-m2": (0.5, 2),
+    # Kimi / Moonshot
+    "moonshotai/kimi-k2.6": (1, 4), "kimi-k2.6": (1, 4), "kimi-k2.5": (1, 4), "kimi-k2": (0.6, 2.5),
+    # Xiaomi MiMo
+    "mimo-v2.5-pro": (0.3, 1.2), "mimo-v2-pro": (0.3, 1.2), "mimo": (0.3, 1.2),
+    # Misc / OpenRouter-style
+    "qwen3-coder-next": (0.5, 2), "qwen3-coder": (0.5, 2),
+    "gemini-2.0-flash": (0.1, 0.4), "gemini-2.5-pro": (1.25, 5),
+    "llama-3.3-70b": (0.59, 0.79), "glm-4.6": (0.6, 2.2), "glm-4.5": (0.6, 2.2),
 }
+_DEFAULT_PRICE = (1, 4)  # conservative mid-tier fallback for unknown models
+
+
+def _price_for(model: str) -> tuple:
+    """Resolve pricing for a model name via longest-key prefix/substring match.
+
+    Iterating longest keys first avoids a short key (e.g. 'gpt-5') shadowing a
+    more specific one (e.g. 'gpt-5.4'). Unknown models fall back to a
+    conservative mid-tier price rather than the old sonnet-level (3,15),
+    which over-counted cheap models ~10×.
+    """
+    key = (model or "").lower()
+    if not key:
+        return _DEFAULT_PRICE
+    for k in sorted(_PRICING, key=len, reverse=True):
+        if k in key or key in k:
+            return _PRICING[k]
+    return _DEFAULT_PRICE
 
 
 def _estimate_cost(model: str, inp: int, out: int, cache_read: int = 0, cache_write: int = 0) -> float:
-    """Estimate cost in USD based on model pricing.
-
-    cache_read tokens cost 0.1× the input rate; cache_write tokens cost 1.25×.
-    """
-    key = model.lower() if model else ""
-    prices = None
-    for k, v in _PRICING.items():
-        if k.lower() in key or key in k.lower():
-            prices = v
-            break
-    if not prices:
-        prices = (3, 15)  # default to sonnet-level pricing
+    """Estimate cost in USD. cache_read = 0.1× input rate; cache_write = 1.25×."""
+    prices = _price_for(model)
     return (
         inp * prices[0]
         + out * prices[1]
@@ -790,7 +809,6 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
     """Token usage stats from ALL sources on this server."""
     now = time.time()
     today_key = _datetime.fromtimestamp(now, tz=_LOCAL_TZ).strftime("%Y-%m-%d")
-    model_since = now - 30 * 86400
     daily_map: dict = {}
     weekly_map: dict = {}
     monthly_map: dict = {}
@@ -798,6 +816,10 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
     agent_map: dict = {}
     today_agent_map: dict = {}
     coverage: list = []
+    # Running grand totals across ALL ingested rows (full window, every source).
+    totals = {"sessions": 0, "input_tokens": 0, "output_tokens": 0,
+              "cache_read_tokens": 0, "cache_write_tokens": 0,
+              "total_tokens": 0, "cost_usd": 0.0}
 
     def _bump(m: dict, key: str, inp: int, out: int, cost: float, source: str | None = None, credits: float = 0.0):
         if key not in m:
@@ -837,14 +859,24 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
         _bump(agent_map, agent, inp, out, cost, source, credits)
         if day == today_key:
             _bump(today_agent_map, agent, inp, out, cost, source, credits)
-        if model and ts >= model_since:
+        # Model breakdown — same full window as agents (口径统一).
+        if model:
             if model not in model_map:
                 model_map[model] = {"sessions": 0, "total_tokens": 0, "cost_usd": 0.0}
             model_map[model]["sessions"] += 1
             model_map[model]["total_tokens"] += total
             model_map[model]["cost_usd"] = round(model_map[model]["cost_usd"] + cost, 4)
+        # Grand totals.
+        totals["sessions"] += 1
+        totals["input_tokens"] += inp
+        totals["output_tokens"] += out
+        totals["cache_read_tokens"] += cache_read
+        totals["cache_write_tokens"] += cache_write
+        totals["total_tokens"] += total
+        totals["cost_usd"] = round(totals["cost_usd"] + cost, 4)
 
-    since = now - 180 * 86400
+    # Full lookback window — 2 years covers all current data with headroom.
+    since = now - 730 * 86400
 
     # Resolve integration paths once per request so a live hub_settings edit
     # takes effect on the next call. Each is Optional[Path]; the helper
@@ -1009,15 +1041,16 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
             rows.append(row)
         return sorted(rows, key=lambda x: x["total_tokens"], reverse=True)
 
-    daily = _to_list(daily_map, "day")[:30]
-    weekly = _to_list(weekly_map, "week")[:12]
-    monthly = _to_list(monthly_map, "month")[:6]
+    daily = _to_list(daily_map, "day")[:90]
+    weekly = _to_list(weekly_map, "week")[:26]
+    monthly = _to_list(monthly_map, "month")[:12]
     models = sorted(
         [{"model": k, **v} for k, v in model_map.items()],
         key=lambda x: x["total_tokens"], reverse=True
-    )[:15]
+    )[:30]
 
     return {
+        "totals": totals,
         "daily": daily,
         "weekly": weekly,
         "monthly": monthly,

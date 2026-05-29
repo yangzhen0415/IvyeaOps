@@ -535,6 +535,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
   const thisWeek = data.weekly[0];
   const thisMonth = data.monthly[0];
   const todayTop = data.today_agents?.[0];
+  const totals = data.totals;
 
   // Bar chart data (last 14 entries of current tab)
   const chartData = list.slice(0, 14).reverse();
@@ -543,6 +544,32 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
   return (
     <>
       <div className="ptitle" style={{ marginTop: 20 }}>/ Token 使用量统计</div>
+
+      {/* Grand totals — cumulative across all sources & full history */}
+      {totals && (
+        <div className="g4 mb14">
+          <div className="met">
+            <div className="ml">累计总 Token</div>
+            <div className="mv" style={{ color: "var(--acc)" }}>{fmtTokens(totals.total_tokens)}</div>
+            <div className="ms neu">{totals.sessions} 次会话（全部历史）</div>
+          </div>
+          <div className="met">
+            <div className="ml">累计参考金额</div>
+            <div className="mv" style={{ color: "var(--amber)" }}>${totals.cost_usd.toFixed(2)}</div>
+            <div className="ms neu">含缓存折算</div>
+          </div>
+          <div className="met">
+            <div className="ml">累计输入</div>
+            <div className="mv" style={{ color: "var(--blue)" }}>{fmtTokens(totals.input_tokens)}</div>
+            <div className="ms neu">缓存读取 {fmtTokens(totals.cache_read_tokens)}</div>
+          </div>
+          <div className="met">
+            <div className="ml">累计输出</div>
+            <div className="mv" style={{ color: "var(--purple)" }}>{fmtTokens(totals.output_tokens)}</div>
+            <div className="ms neu">缓存写入 {fmtTokens(totals.cache_write_tokens)}</div>
+          </div>
+        </div>
+      )}
 
       {/* Summary metrics */}
       <div className="g4 mb14">
@@ -707,7 +734,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
         </div>
 
         <div className="card">
-          <div className="ct">180 天智能体总排行</div>
+          <div className="ct">智能体累计排行（全部历史）</div>
           {data.agents && data.agents.length > 0 ? (
             data.agents.map((a, i) => {
               const pct = Math.min(100, (a.total_tokens / (data.agents[0]?.total_tokens || 1)) * 100);

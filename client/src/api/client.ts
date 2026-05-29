@@ -876,7 +876,13 @@ export type TokenAgentStat = {
 export type TokenCoverageStat = {
   source: string; path: string; status: string; sessions: number; total_tokens: number; credits: number;
 };
+export type TokenTotals = {
+  sessions: number; input_tokens: number; output_tokens: number;
+  cache_read_tokens: number; cache_write_tokens: number;
+  total_tokens: number; cost_usd: number;
+};
 export type TokenUsageData = {
+  totals?: TokenTotals;
   daily: TokenDayStat[]; weekly: TokenWeekStat[];
   monthly: TokenMonthStat[]; models: TokenModelStat[];
   agents: TokenAgentStat[];
