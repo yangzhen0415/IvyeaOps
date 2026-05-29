@@ -223,14 +223,20 @@ function ProviderPicker({
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const selected = PROVIDERS.find(p => p.id === value);
 
-  // Close on outside tap/click
+  // Close on outside tap/click — must exclude BOTH the trigger and the
+  // fixed-position menu (the menu is rendered outside the trigger's subtree,
+  // so a tap inside it would otherwise be treated as "outside" and close it
+  // before the option's click handler runs).
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
-      if (triggerRef.current && !triggerRef.current.contains(target)) setOpen(false);
+      const inTrigger = triggerRef.current?.contains(target);
+      const inMenu = menuRef.current?.contains(target);
+      if (!inTrigger && !inMenu) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     document.addEventListener("touchstart", handler);
@@ -281,7 +287,7 @@ function ProviderPicker({
 
       {/* fixed-position dropdown — not clipped by any parent overflow */}
       {open && rect && (
-        <div style={{
+        <div ref={menuRef} style={{
           position: "fixed",
           top: dropTop,
           left: rect.left,
@@ -295,25 +301,29 @@ function ProviderPicker({
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
         }}>
-          {PROVIDERS.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              onMouseDown={e => e.preventDefault()}   // prevent blur on desktop
-              onClick={() => { onChange(p.id, p.defaultModel); setOpen(false); }}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 8,
-                padding: "10px 12px", border: "none",
-                background: value === p.id ? "color-mix(in srgb, var(--acc) 12%, var(--bg2))" : "transparent",
-                color: value === p.id ? "var(--acc)" : "var(--t2)",
-                fontSize: 12, fontFamily: "var(--font)", cursor: "pointer", textAlign: "left",
-              }}
-            >
-              <span style={{ flex: 1 }}>{p.label}</span>
-              {p.hint && <span style={{ color: "var(--t3)", fontSize: 10 }}>{p.hint}</span>}
-              {value === p.id && <span style={{ color: "var(--acc)", fontSize: 10 }}>✓</span>}
-            </button>
-          ))}
+          {PROVIDERS.map(p => {
+            const pick = () => { onChange(p.id, p.defaultModel); setOpen(false); };
+            return (
+              <div
+                key={p.id}
+                role="button"
+                tabIndex={0}
+                onClick={pick}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 8,
+                  padding: "10px 12px",
+                  background: value === p.id ? "color-mix(in srgb, var(--acc) 12%, var(--bg2))" : "transparent",
+                  color: value === p.id ? "var(--acc)" : "var(--t2)",
+                  fontSize: 12, fontFamily: "var(--font)", cursor: "pointer", textAlign: "left",
+                  userSelect: "none",
+                }}
+              >
+                <span style={{ flex: 1 }}>{p.label}</span>
+                {p.hint && <span style={{ color: "var(--t3)", fontSize: 10 }}>{p.hint}</span>}
+                {value === p.id && <span style={{ color: "var(--acc)", fontSize: 10 }}>✓</span>}
+              </div>
+            );
+          })}
         </div>
       )}
     </>
