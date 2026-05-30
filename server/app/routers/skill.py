@@ -640,6 +640,28 @@ async def generate_from_idea(
             name = "generated-skill"
 
     category = body.category or fm.get("category", "")
+    # Fallback auto-categorization when neither the user nor the AI set one:
+    # map keywords in the idea to a sensible top-level category so the skill
+    # doesn't land in "(未分类)".
+    if not category:
+        idea_l = body.idea.lower()
+        _CAT_RULES = [
+            ("amazon/reviews",   ["评论", "review", "差评", "好评", "口碑"]),
+            ("amazon/ads",       ["广告", "投放", "ad ", "ppc", "acos", "竞价", "出价"]),
+            ("amazon/listing",   ["listing", "标题", "五点", "描述", "文案", "a+", "卖点"]),
+            ("amazon/keywords",  ["关键词", "keyword", "搜索量", "长尾"]),
+            ("amazon/competitor",["竞品", "对手", "competitor", "对比"]),
+            ("amazon/market",    ["市场", "选品", "类目", "趋势", "market", "调研"]),
+            ("amazon",           ["asin", "亚马逊", "amazon", "产品", "商品"]),
+        ]
+        for cat, kws in _CAT_RULES:
+            if any(k in idea_l for k in kws):
+                category = cat
+                break
+
+    # Keep frontmatter's category in sync so the saved SKILL.md carries it.
+    if category:
+        fm["category"] = category
 
     return GenerateFromIdeaResponse(
         name=name,

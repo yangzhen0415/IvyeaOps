@@ -11,6 +11,7 @@ export default function SkillTools() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeTool, setActiveTool] = useState<SkillToolMeta | null>(null);
+  const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
   const routerLoc = useLocation();
   const confirm = useConfirm();
 
@@ -131,11 +132,18 @@ export default function SkillTools() {
           if (!grouped[cat]) grouped[cat] = [];
           grouped[cat].push(t);
         }
-        return Object.entries(grouped).map(([cat, items]) => (
+        return Object.entries(grouped).map(([cat, items]) => {
+          const collapsed = !!collapsedCats[cat];
+          return (
           <div key={cat} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: "var(--t2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>
-              {cat}
+            <div
+              onClick={() => setCollapsedCats((m) => ({ ...m, [cat]: !m[cat] }))}
+              style={{ fontSize: 10, fontWeight: 600, color: "var(--t2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}>
+              <span style={{ display: "inline-block", transition: "transform .12s", transform: collapsed ? "rotate(-90deg)" : "none", fontSize: 8 }}>▼</span>
+              <span>{cat}</span>
+              <span style={{ color: "var(--t3)", fontWeight: 400 }}>({items.length})</span>
             </div>
+            {!collapsed && (
             <div className="g3">
               {items.map((t) => (
                 <div
@@ -163,11 +171,18 @@ export default function SkillTools() {
                   <div style={{ fontSize: 10, color: "var(--t3)", lineHeight: 1.5 }}>
                     {t.description_zh || t.description || "无描述"}
                   </div>
+                  {!t.has_execution && (
+                    <div style={{ fontSize: 9, color: "var(--amber)", marginTop: 6 }}>
+                      ⚠ 仅文档说明，无可执行步骤
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+            )}
           </div>
-        ));
+          );
+        });
       })()}
     </div>
   );
@@ -298,12 +313,20 @@ function ToolPanel({ tool }: { tool: SkillToolMeta }) {
             </div>
           ))}
         </div>
-      ) : (
+      ) : tool.has_execution ? (
         <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 14 }}>
           此工具无可配置参数，点击直接执行。
         </div>
+      ) : null}
+
+      {!tool.has_execution && (
+        <div style={{ fontSize: 11, color: "var(--amber)", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.25)", borderRadius: 6, padding: "10px 12px", marginBottom: 12, lineHeight: 1.6 }}>
+          ⚠ 这个 Skill 没有定义可执行的步骤/参数，目前只是一份说明文档，无法在此直接运行。<br />
+          如需让它可执行，请在「Skill 管理」中编辑，补充 inputs 参数和带 {"{{参数}}"} 的执行步骤。
+        </div>
       )}
 
+      {tool.has_execution && (
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button className="market-btn market-btn-submit" onClick={run} disabled={loading}>
           {loading ? "执行中…" : "执行"}
@@ -314,6 +337,7 @@ function ToolPanel({ tool }: { tool: SkillToolMeta }) {
           </button>
         )}
       </div>
+      )}
 
       {error && <div className="market-error" style={{ marginTop: 10 }}>{error}</div>}
 
