@@ -47,7 +47,7 @@ export default function IdeaSkill() {
       const { data } = await api.post("/skill/generate-from-idea", {
         idea: idea.trim(),
         category: category || undefined,
-      });
+      }, { timeout: 300000 });
       setGenerated(data);
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || "生成失败");
