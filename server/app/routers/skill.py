@@ -573,9 +573,18 @@ async def generate_from_idea(
         except Exception:
             pass
 
-    prompt = f"""你是一位 Hermes Skill 编写专家。用户有一个想法，请帮他生成一个完整的 SKILL.md。
+    prompt = f"""你是一位 Hermes Skill 编写专家。用户描述了一个需求，请帮他**编写**一份完整的 SKILL.md。
 
-用户想法：{body.idea}
+【重要】你现在的任务是"写说明书"，不是"执行任务"。
+- 不要现在去抓取任何数据、不要调用任何工具、不要要求用户提供真实 ASIN 或关键词。
+- 你只需写出这份 SKILL.md 文档——它描述这个 Skill 将来被运行时该怎么做。
+- 运行环境里有这些 MCP 工具可供该 Skill 使用（写步骤时可引用它们）：
+  · Sorftime（`mcp_sorftime_*`）：关键词详情/趋势、商品报告/流量词/评论、类目报告等
+  · SIF（`mcp_sif_*`）：关键词竞争、竞品关键词信号、流量异常
+  · 卖家精灵 SellerSprite（`mcp_sellersprite_*`）：关键词流量、ASIN 关键词、竞品词分析
+  真实抓数据是 Skill **被运行时**才发生的事，由用户在工具页填入真实参数后触发。
+
+用户需求：{body.idea}
 {f"目标分类：{body.category}" if body.category else "请自行判断最合适的分类。"}
 {ref_context}
 
@@ -587,34 +596,26 @@ async def generate_from_idea(
    - description_zh: 一句话中文描述
    - category: 分类路径
    - icon: 一个合适的 emoji 图标
+   - inputs: 该 Skill 运行时需要用户填的参数（数组，每项含 name/label/type/required），
+     例如抓评论类通常需要 asin、marketplace 等。
 
 2. Markdown body：
-   - 简要说明这个 Skill 的用途
-   - 使用场景
-   - 具体步骤（numbered steps）
-   - 如有需要，定义 inputs 参数（用 {{{{param_name}}}} 模板变量）
+   - 简要说明这个 Skill 的用途和使用场景
+   - 具体步骤（numbered steps）：明确每步该调哪个 MCP 工具、传什么参数（用 {{{{param}}}} 引用 inputs）
+   - 输出/报告的结构
    - 注意事项 / pitfalls
 
-只输出 SKILL.md 的完整内容，不要加其他解释。"""
+只输出 SKILL.md 的完整内容（从 --- 开始），不要加其他解释。"""
 
-    # Collect the full response
-    chunks = []
+    # Plain text-only generation: we want the model to WRITE a SKILL.md, not
+    # execute it. synthesize_native() would inject sorftime tool-calling and
+    # try to fetch market data — wrong for authoring. generate_text has no tools.
     try:
-        async for prov, chunk in ai_synthesis_service.synthesize_native(
-            "keyword", prompt, "US"
-        ):
-            if prov == "_attempt":
-                continue
-            elif prov == "error":
-                raise HTTPException(502, f"AI 生成失败: {chunk}")
-            else:
-                chunks.append(chunk)
-    except HTTPException:
-        raise
+        full_text = (await ai_synthesis_service.generate_text(prompt)).strip()
     except Exception as exc:
         raise HTTPException(502, f"AI 生成失败: {exc}")
-
-    full_text = "".join(chunks).strip()
+    if not full_text:
+        raise HTTPException(502, "AI 生成失败: 返回空内容")
 
     # Extract SKILL.md from markdown code block if wrapped
     if "```" in full_text:

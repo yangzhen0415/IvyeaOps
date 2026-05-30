@@ -774,6 +774,49 @@ async def _stream_apimart(prompt: str) -> AsyncGenerator[str, None]:
                     raise RuntimeError(f"apimart error: {event.get('error', event)}")
 
 
+async def generate_text(prompt: str) -> str:
+    """Plain text-only LLM generation — NO tools, NO Sorftime MCP.
+
+    For tasks that just need the model to write text (e.g. authoring a
+    SKILL.md from a description). Tries DeepSeek first, then Apimart. This is
+    deliberately separate from ``synthesize_native``, which injects sorftime
+    tool-calling templates and would (wrongly) try to fetch market data.
+    """
+    failures: list[str] = []
+
+    dkey = _deepseek_key()
+    if dkey:
+        try:
+            parts: list[str] = []
+            async for chunk in _stream_openai_compat(
+                dkey, "https://api.deepseek.com", "deepseek-chat", prompt
+            ):
+                parts.append(chunk)
+            text = "".join(parts).strip()
+            if text:
+                return text
+            failures.append("DeepSeek 返回空")
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"DeepSeek: {exc}")
+
+    if _apimart_key():
+        try:
+            parts = []
+            async for chunk in _stream_apimart(prompt):
+                parts.append(chunk)
+            text = "".join(parts).strip()
+            if text:
+                return text
+            failures.append("Apimart 返回空")
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"Apimart: {exc}")
+
+    raise RuntimeError(
+        "无可用文本模型。" + (" / ".join(failures) if failures else
+        "请在「系统配置」配置 DeepSeek 或 Apimart key。")
+    )
+
+
 async def _stream_openai_compat(
     api_key: str, base_url: str, model: str, prompt: str
 ) -> AsyncGenerator[str, None]:
