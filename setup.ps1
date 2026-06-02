@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════
-# ops-hub — Smart Installer for Windows
+# IvyeaOps — Smart Installer for Windows
 # Auto-detects & installs all dependencies
 # ═══════════════════════════════════════════════════
 
@@ -15,7 +15,7 @@ function Test-Command($cmd) {
 
 Write-Host ""
 Write-Host "  ╔═══════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║     ops-hub — Smart Installer         ║" -ForegroundColor Cyan
+Write-Host "  ║     IvyeaOps — Smart Installer         ║" -ForegroundColor Cyan
 Write-Host "  ╚═══════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
@@ -101,18 +101,18 @@ if (Test-Command "hermes") {
 Write-Host ""
 
 # ── Step 4: Clone repo ──
-Write-Status "Step 4/5 — Getting ops-hub..." "info"
+Write-Status "Step 4/5 — Getting IvyeaOps..." "info"
 Write-Host ""
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = $scriptDir
 
 if (Test-Path "$repoDir\docker-compose.yml") {
-    Write-Status "Already in ops-hub directory" "ok"
+    Write-Status "Already in IvyeaOps directory" "ok"
 } else {
-    Write-Status "Cloning ops-hub..." "info"
-    $repoDir = "$env:USERPROFILE\ops-hub"
-    git clone https://github.com/Hector-xue/ops-hub.git $repoDir
+    Write-Status "Cloning IvyeaOps..." "info"
+    $repoDir = "$env:USERPROFILE\ivyea-ops"
+    git clone https://github.com/Hector-xue/IvyeaOps.git $repoDir
     Set-Location $repoDir
     Write-Status "Cloned to $repoDir" "ok"
 }
@@ -165,7 +165,7 @@ for ($i = 0; $i -lt 30; $i++) {
 Write-Host ""
 Write-Host "  ╔═══════════════════════════════════════╗" -ForegroundColor Green
 Write-Host "  ║                                       ║" -ForegroundColor Green
-Write-Host "  ║   ops-hub is ready!                   ║" -ForegroundColor Green
+Write-Host "  ║   IvyeaOps is ready!                   ║" -ForegroundColor Green
 Write-Host "  ║                                       ║" -ForegroundColor Green
 Write-Host "  ║   Open: http://localhost:$port           ║" -ForegroundColor Green
 Write-Host "  ║                                       ║" -ForegroundColor Green

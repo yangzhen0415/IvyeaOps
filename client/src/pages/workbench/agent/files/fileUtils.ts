@@ -1,6 +1,6 @@
 // File-related formatting + extension → icon mapping.
 // Icons are intentionally Unicode glyphs (not lucide / external font) so the
-// component stays self-contained and matches the existing ops-hub aesthetic.
+// component stays self-contained and matches the existing IvyeaOps aesthetic.
 
 export function formatSize(bytes: number | null | undefined): string {
   if (bytes == null) return "";

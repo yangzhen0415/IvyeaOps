@@ -237,7 +237,7 @@ export function useShellTerminal({ containerRef, wsRef, inputBlocked }: Options)
       ro.observe(containerRef.current);
 
       // Stash cleanup on the terminal so the outer disposer can grab it.
-      (term as any)._opshubCleanup = () => {
+      (term as any)._ivyeaOpsCleanup = () => {
         el?.removeEventListener("wheel", onWheel, { capture: true } as any);
         el?.removeEventListener("touchstart", onTouchStart, { capture: true } as any);
         el?.removeEventListener("touchmove", onTouchMove, { capture: true } as any);
@@ -256,7 +256,7 @@ export function useShellTerminal({ containerRef, wsRef, inputBlocked }: Options)
       disposed = true;
       const term = termRef.current;
       if (term) {
-        try { (term as any)._opshubCleanup?.(); } catch { /* ignore */ }
+        try { (term as any)._ivyeaOpsCleanup?.(); } catch { /* ignore */ }
         try { term.dispose(); } catch { /* ignore */ }
         termRef.current = null;
       }

@@ -8,4 +8,4 @@ router = APIRouter()
 
 @router.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "ops-hub"}
+    return {"status": "ok", "service": "IvyeaOps"}

@@ -23,13 +23,13 @@ def client(tmp_path: Path, monkeypatch):
     data_dir.mkdir(parents=True, exist_ok=True)
 
     password_hash = bcrypt.hashpw(b"test-admin-pass", bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setenv("OPSHUB_DATA_DIR", str(data_dir))
-    monkeypatch.setenv("OPSHUB_SECRET", "test-secret-auth-admin")
-    monkeypatch.setenv("OPSHUB_USER", "admin")
-    monkeypatch.setenv("OPSHUB_PASSWORD_HASH", password_hash)
-    monkeypatch.setenv("OPSHUB_ALLOWED_ORIGINS", "http://testserver")
-    monkeypatch.setenv("OPSHUB_COOKIE_DOMAIN", "")
-    monkeypatch.setenv("OPSHUB_DEV", "1")
+    monkeypatch.setenv("IVYEA_OPS_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("IVYEA_OPS_SECRET", "test-secret-auth-admin")
+    monkeypatch.setenv("IVYEA_OPS_USER", "admin")
+    monkeypatch.setenv("IVYEA_OPS_PASSWORD_HASH", password_hash)
+    monkeypatch.setenv("IVYEA_OPS_ALLOWED_ORIGINS", "http://testserver")
+    monkeypatch.setenv("IVYEA_OPS_COOKIE_DOMAIN", "")
+    monkeypatch.setenv("IVYEA_OPS_DEV", "1")
 
     class _DummyScreen:
         def __init__(self, *args, **kwargs):

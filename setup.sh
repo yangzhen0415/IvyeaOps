@@ -2,7 +2,7 @@
 set -e
 
 # ═══════════════════════════════════════════════════
-# ops-hub — Smart Setup Script
+# IvyeaOps — Smart Setup Script
 # Auto-detects & installs all dependencies
 # ═══════════════════════════════════════════════════
 
@@ -19,7 +19,7 @@ err()  { echo -e "${RED}  ✗ $1${NC}"; }
 
 echo ""
 echo "  ╔═══════════════════════════════════════╗"
-echo "  ║     ops-hub — Smart Installer         ║"
+echo "  ║     IvyeaOps — Smart Installer         ║"
 echo "  ╚═══════════════════════════════════════╝"
 echo ""
 
@@ -192,7 +192,7 @@ install_gbrain() {
     else
         warn "Skipping semantic search. GBrain will use keyword search only."
         warn "  To enable later: install ollama, 'ollama pull nomic-embed-text',"
-        warn "  then set embedding in ops-hub 系统配置 → 智能体 → 知识库语义检索."
+        warn "  then set embedding in IvyeaOps 系统配置 → 智能体 → 知识库语义检索."
     fi
 }
 
@@ -401,21 +401,21 @@ fi
 echo ""
 
 # ── Step 3: Clone repo ────────────────────────────
-log "Step 3/5 — Getting ops-hub..."
+log "Step 3/5 — Getting IvyeaOps..."
 echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 
 if [[ -f "$REPO_DIR/docker-compose.yml" ]]; then
-    ok "Already in ops-hub directory"
+    ok "Already in IvyeaOps directory"
 else
-    log "Cloning ops-hub..."
-    git clone https://github.com/Hector-xue/ops-hub.git "$HOME/ops-hub" 2>/dev/null || {
-        err "Failed to clone ops-hub."
+    log "Cloning IvyeaOps..."
+    git clone https://github.com/Hector-xue/IvyeaOps.git "$HOME/ivyea-ops" 2>/dev/null || {
+        err "Failed to clone IvyeaOps."
         exit 1
     }
-    REPO_DIR="$HOME/ops-hub"
+    REPO_DIR="$HOME/ivyea-ops"
     cd "$REPO_DIR"
     ok "Cloned to $REPO_DIR"
 fi
@@ -473,7 +473,7 @@ done
 echo ""
 echo "  ╔═══════════════════════════════════════╗"
 echo "  ║                                       ║"
-echo "  ║   ops-hub is ready!                   ║"
+echo "  ║   IvyeaOps is ready!                   ║"
 echo "  ║                                       ║"
 echo "  ║   Open: http://localhost:${PORT:-8080}           ║"
 echo "  ║                                       ║"

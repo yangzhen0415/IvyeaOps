@@ -1,7 +1,7 @@
 import { IS_PLATFORM } from "../constants/config";
 
 // 后端从 Node(:3002)全量重写为 ops 原生 FastAPI(/api/ccui/*),逐阶段 dogfood 切换。
-// 已迁移并验证的路径前缀走原生后端(/api/ccui,同源 + opshub_session cookie 鉴权);
+// 已迁移并验证的路径前缀走原生后端(/api/ccui,同源 + ivyea_ops_session cookie 鉴权);
 // 其余仍经 nginx /ccui-api 反代到 Node :3002,保持线上可用。每完成一个阶段就把对应前缀
 // 加进 _MIGRATED;全部迁完后即彻底脱离 :3002。
 // 已迁移到原生后端的路径前缀(P0)。

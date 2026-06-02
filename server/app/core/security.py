@@ -20,7 +20,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.core.config import settings
 
-_serializer = URLSafeTimedSerializer(settings.secret_key, salt="opshub.session")
+_serializer = URLSafeTimedSerializer(settings.secret_key, salt="ivyea-ops.session")
 
 ADMIN_ID = "admin"
 

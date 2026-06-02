@@ -250,9 +250,9 @@ function AgentRow({
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
     <>
-      <div style={S.title}>欢迎使用 ops-hub</div>
+      <div style={S.title}>欢迎使用 IvyeaOps</div>
       <div style={S.sub}>
-        ops-hub 是一个自托管的运营工作台，集成了 AI Agent、市场调研、广告审计、
+        IvyeaOps 是一个自托管的运营工作台，集成了 AI Agent、市场调研、广告审计、
         Listing 生成、知识库等功能。<br /><br />
         这个向导将帮你完成初始配置，只需 2 分钟。
       </div>
@@ -326,7 +326,7 @@ function StepAgents({
     <>
       <div style={S.title}>AI Agent 检测</div>
       <div style={S.sub}>
-        ops-hub 需要至少一个 Agent CLI 来驱动 AI 功能。检测到三个可选项，
+        IvyeaOps 需要至少一个 Agent CLI 来驱动 AI 功能。检测到三个可选项，
         安装至少一个即可。已安装的会自动识别。
       </div>
       {agents.map((a) => (
@@ -494,7 +494,7 @@ function StepDone({ onFinish }: { onFinish: () => void }) {
         <div style={{ fontSize: 40, marginBottom: 16 }}>✓</div>
         <div style={{ ...S.title, textAlign: "center" }}>配置完成</div>
         <div style={{ ...S.sub, textAlign: "center" }}>
-          ops-hub 已就绪。随时可以在「系统配置」页修改或补充任何设置。
+          IvyeaOps 已就绪。随时可以在「系统配置」页修改或补充任何设置。
         </div>
         <div
           style={{

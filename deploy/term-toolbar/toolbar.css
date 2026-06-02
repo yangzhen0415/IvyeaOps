@@ -1,5 +1,5 @@
 /*
- * ttyd iframe-side styles for the ops-hub terminal toolbar
+ * ttyd iframe-side styles for the IvyeaOps terminal toolbar
  *
  * Selection-mode overrides. The .tb-select-mode class on <html> is toggled
  * via postMessage from the parent. We apply user-select:text unconditionally

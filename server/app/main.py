@@ -1,4 +1,4 @@
-"""ops-hub FastAPI backend entry point."""
+"""IvyeaOps FastAPI backend entry point."""
 from __future__ import annotations
 
 import asyncio
@@ -50,9 +50,9 @@ async def lifespan(app: FastAPI):
     # Studio API will surface a clear error on first call.
     ensure_studio_dirs()
     if not SKILLS_ROOT.exists():
-        print(f"[ops-hub] WARNING skills root missing: {SKILLS_ROOT}")
+        print(f"[IvyeaOps] WARNING skills root missing: {SKILLS_ROOT}")
     for key, value in studio_paths_summary().items():
-        print(f"[ops-hub] {key}: {value}")
+        print(f"[IvyeaOps] {key}: {value}")
 
     # Best-effort: sweep expired trash entries on startup. Failure here must
     # never block the server from coming up — the API will retry on demand.
@@ -60,18 +60,18 @@ async def lifespan(app: FastAPI):
         from app.services.trash import purge_expired
         purged = purge_expired()
         if purged:
-            print(f"[ops-hub] purged {purged} expired trash entries")
+            print(f"[IvyeaOps] purged {purged} expired trash entries")
     except Exception as e:
-        print(f"[ops-hub] trash purge skipped: {e}")
+        print(f"[IvyeaOps] trash purge skipped: {e}")
 
     # Best-effort: sweep expired ASIN audit artifacts (30-day retention).
     try:
         from app.services.asin_audit import sweep_expired as _sweep_audits
         n = _sweep_audits()
         if n:
-            print(f"[ops-hub] purged {n} expired audit dirs")
+            print(f"[IvyeaOps] purged {n} expired audit dirs")
     except Exception as e:
-        print(f"[ops-hub] audit sweep skipped: {e}")
+        print(f"[IvyeaOps] audit sweep skipped: {e}")
 
     # Rescue ghost "running" jobs left behind by a prior crash/restart:
     # _live_jobs is empty on boot, so anything status=running on disk is stale.
@@ -79,76 +79,76 @@ async def lifespan(app: FastAPI):
         from app.services.asin_audit import sweep_stale_running
         n = sweep_stale_running()
         if n:
-            print(f"[ops-hub] marked {n} stale running jobs as failed")
+            print(f"[IvyeaOps] marked {n} stale running jobs as failed")
     except Exception as e:
-        print(f"[ops-hub] stale running sweep skipped: {e}")
+        print(f"[IvyeaOps] stale running sweep skipped: {e}")
 
     # Same pair of sweeps for ad-audit jobs.
     try:
         from app.services.ad_audit import sweep_expired as _sweep_ad
         n = _sweep_ad()
         if n:
-            print(f"[ops-hub] purged {n} expired ad-audit dirs")
+            print(f"[IvyeaOps] purged {n} expired ad-audit dirs")
     except Exception as e:
-        print(f"[ops-hub] ad-audit expired sweep skipped: {e}")
+        print(f"[IvyeaOps] ad-audit expired sweep skipped: {e}")
 
     try:
         from app.services.ad_audit import sweep_stale_running as _sweep_ad_stale
         n = _sweep_ad_stale()
         if n:
-            print(f"[ops-hub] marked {n} stale ad-audit jobs as failed")
+            print(f"[IvyeaOps] marked {n} stale ad-audit jobs as failed")
     except Exception as e:
-        print(f"[ops-hub] ad-audit stale sweep skipped: {e}")
+        print(f"[IvyeaOps] ad-audit stale sweep skipped: {e}")
 
     # Market research history DB.
     try:
         from app.routers.market import _init_history_db as _init_market_hist
         _init_market_hist()
-        print("[ops-hub] market history DB ready")
+        print("[IvyeaOps] market history DB ready")
     except Exception as e:
-        print(f"[ops-hub] market history DB init skipped: {e}")
+        print(f"[IvyeaOps] market history DB init skipped: {e}")
 
     # CloudCLI native backend: ensure its metadata tables exist (no-op against
     # the live ~/.cloudcli/auth.db the old Node service shared).
     try:
         from app.ccui.db import init_db as _init_ccui_db
         _init_ccui_db()
-        print("[ops-hub] ccui DB ready")
+        print("[IvyeaOps] ccui DB ready")
     except Exception as e:
-        print(f"[ops-hub] ccui DB init skipped: {e}")
+        print(f"[IvyeaOps] ccui DB init skipped: {e}")
 
     # Launch-playbook history DB.
     try:
         from app.routers.playbook import _init_history_db as _init_playbook_hist
         _init_playbook_hist()
-        print("[ops-hub] playbook history DB ready")
+        print("[IvyeaOps] playbook history DB ready")
     except Exception as e:
-        print(f"[ops-hub] playbook history DB init skipped: {e}")
+        print(f"[IvyeaOps] playbook history DB init skipped: {e}")
 
     # Home monitor (watchlist + snapshots) DB.
     try:
         from app.routers.home import _init_db as _init_home_db
         _init_home_db()
-        print("[ops-hub] home monitor DB ready")
+        print("[IvyeaOps] home monitor DB ready")
     except Exception as e:
-        print(f"[ops-hub] home monitor DB init skipped: {e}")
+        print(f"[IvyeaOps] home monitor DB init skipped: {e}")
 
     # Registered-users DB (multi-user mode).
     try:
         from app.services import users_service
         users_service.init_db()
-        print("[ops-hub] users DB ready")
+        print("[IvyeaOps] users DB ready")
     except Exception as e:
-        print(f"[ops-hub] users DB init skipped: {e}")
+        print(f"[IvyeaOps] users DB init skipped: {e}")
 
     # Brain chat/upload metadata DB is local SQLite; initialize eagerly so
     # schema problems are visible at boot, while keeping the service lightweight.
     try:
         from app.services.brain_chat_service import init_db as _init_brain_chat
         _init_brain_chat()
-        print("[ops-hub] brain chat DB ready")
+        print("[IvyeaOps] brain chat DB ready")
     except Exception as e:
-        print(f"[ops-hub] brain chat DB init skipped: {e}")
+        print(f"[IvyeaOps] brain chat DB init skipped: {e}")
 
     # Multi-agent hub: schema + agent discovery + PTY reaper.  All best-effort
     # so a misconfigured agent (e.g. missing binary) never blocks server boot.
@@ -160,14 +160,14 @@ async def lifespan(app: FastAPI):
         _agent_db.init_db()
         agents = _agent_reg.discover_agents()
         ok = sum(1 for a in agents if a.get("enabled"))
-        print(f"[ops-hub] agent registry: {ok}/{len(agents)} enabled")
+        print(f"[IvyeaOps] agent registry: {ok}/{len(agents)} enabled")
         _pty_mgr.start_background_tasks()
     except Exception as e:
-        print(f"[ops-hub] agent hub init skipped: {e}")
+        print(f"[IvyeaOps] agent hub init skipped: {e}")
 
-    print(f"[ops-hub] starting on {settings.host}:{settings.port}")
-    print(f"[ops-hub] data dir: {settings.data_dir}")
-    print(f"[ops-hub] dev_mode: {settings.dev_mode}")
+    print(f"[IvyeaOps] starting on {settings.host}:{settings.port}")
+    print(f"[IvyeaOps] data dir: {settings.data_dir}")
+    print(f"[IvyeaOps] dev_mode: {settings.dev_mode}")
 
     # Terminal subsystem:
     # (1) legacy tmux auto-capture for the old shared terminal page
@@ -175,12 +175,12 @@ async def lifespan(app: FastAPI):
     try:
         terminal.start_autocapture()
     except Exception as e:
-        print(f"[ops-hub] terminal auto-capture not started: {e}")
+        print(f"[IvyeaOps] terminal auto-capture not started: {e}")
     try:
         terminal.init_live_sessions()
-        print("[ops-hub] live terminal sessions ready")
+        print("[IvyeaOps] live terminal sessions ready")
     except Exception as e:
-        print(f"[ops-hub] live terminal init skipped: {e}")
+        print(f"[IvyeaOps] live terminal init skipped: {e}")
 
     # systemd integration: announce READY and start the watchdog ping
     # loop. Both are no-ops when running outside systemd (NOTIFY_SOCKET
@@ -199,22 +199,22 @@ async def lifespan(app: FastAPI):
                 from app.routers.home import run_due_recordings
                 summary = await run_due_recordings()
                 if summary.get("recorded_market") or summary.get("recorded_asin"):
-                    print(f"[ops-hub] market recorder: {summary}")
+                    print(f"[IvyeaOps] market recorder: {summary}")
             except Exception as e:
-                print(f"[ops-hub] market recorder error: {e}")
+                print(f"[IvyeaOps] market recorder error: {e}")
             await asyncio.sleep(1800)
 
     _market_task = asyncio.create_task(_market_daily_loop(), name="market-recorder")
 
-    # Token-usage archiver: snapshot each tool's token data into ops-hub's own
+    # Token-usage archiver: snapshot each tool's token data into IvyeaOps's own
     # DB once a day so history survives even after a tool is uninstalled.
     # Runs once shortly after boot, then every 24h. Best-effort.
     try:
         from app.services import token_archive
         token_archive.init_db()
-        print("[ops-hub] token archive DB ready")
+        print("[IvyeaOps] token archive DB ready")
     except Exception as e:
-        print(f"[ops-hub] token archive init skipped: {e}")
+        print(f"[IvyeaOps] token archive init skipped: {e}")
 
     async def _token_archive_loop():
         await asyncio.sleep(120)  # let boot settle before first snapshot
@@ -222,9 +222,9 @@ async def lifespan(app: FastAPI):
             try:
                 from app.services import token_archive
                 summary = await asyncio.to_thread(token_archive.archive_run, 7)
-                print(f"[ops-hub] token archive: {summary}")
+                print(f"[IvyeaOps] token archive: {summary}")
             except Exception as e:
-                print(f"[ops-hub] token archive error: {e}")
+                print(f"[IvyeaOps] token archive error: {e}")
             await asyncio.sleep(86400)  # daily
 
     _archive_task = asyncio.create_task(_token_archive_loop(), name="token-archiver")
@@ -248,21 +248,21 @@ async def lifespan(app: FastAPI):
     try:
         await terminal.stop_autocapture()
     except Exception as e:
-        print(f"[ops-hub] terminal auto-capture stop error: {e}")
+        print(f"[IvyeaOps] terminal auto-capture stop error: {e}")
     try:
         await terminal.shutdown_live_sessions()
     except Exception as e:
-        print(f"[ops-hub] live terminal shutdown error: {e}")
+        print(f"[IvyeaOps] live terminal shutdown error: {e}")
     try:
         from app.services.pty_manager import manager as _pty_mgr
         await _pty_mgr.shutdown()
     except Exception as e:
-        print(f"[ops-hub] pty manager shutdown error: {e}")
-    print("[ops-hub] stopped")
+        print(f"[IvyeaOps] pty manager shutdown error: {e}")
+    print("[IvyeaOps] stopped")
 
 
 app = FastAPI(
-    title="ops-hub",
+    title="IvyeaOps",
     description="Personal Amazon operations hub",
     version="0.1.0",
     lifespan=lifespan,
@@ -311,7 +311,7 @@ async def _origin_guard(request: Request, call_next):
     if request.method in _UNSAFE_METHODS and request.url.path.startswith("/api/"):
         # Native app requests (no browser CSRF risk) — skip origin check.
         ua = request.headers.get("user-agent", "")
-        if "OpsHubAndroid" in ua:
+        if "IvyeaOpsAndroid" in ua:
             return await call_next(request)
 
         origin = request.headers.get("origin")

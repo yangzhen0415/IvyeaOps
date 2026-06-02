@@ -28,7 +28,7 @@ export default function Onboarding({ onDone }: Props) {
   const [err, setErr] = useState<string | null>(null);
 
   const finish = () => {
-    try { localStorage.setItem("opshub-workspace-onboarded", "1"); } catch { /* ignore */ }
+    try { localStorage.setItem("ivyea-ops-workspace-onboarded", "1"); } catch { /* ignore */ }
     onDone();
   };
 
@@ -81,7 +81,7 @@ export default function Onboarding({ onDone }: Props) {
             <h2 className="onb-title">欢迎使用工作台</h2>
             <p className="onb-text">
               这里聚合你在本机跑过的所有 AI 会话 ——
-              <strong>ops-hub 自建</strong>、<strong>Claude Code</strong>、
+              <strong>IvyeaOps 自建</strong>、<strong>Claude Code</strong>、
               <strong>Codex</strong>，按工作目录自动分组成"项目"，每个项目下都
               能切 <strong>聊天 / 终端 / 文件 / Git</strong> tab。
             </p>

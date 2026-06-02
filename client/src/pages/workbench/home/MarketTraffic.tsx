@@ -45,13 +45,13 @@ export default function MarketTraffic({ marketplace }: { marketplace: string }) 
   const [loading, setLoading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
-  const [view, setView] = useState<View>(() => (localStorage.getItem("opshub-mkt-view") as View) || "month");
+  const [view, setView] = useState<View>(() => (localStorage.getItem("ivyea-ops-mkt-view") as View) || "month");
   const [catInput, setCatInput] = useState("");
   const [dailyBusy, setDailyBusy] = useState(false);
   const [dailyMsg, setDailyMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { localStorage.setItem("opshub-mkt-view", view); }, [view]);
+  useEffect(() => { localStorage.setItem("ivyea-ops-mkt-view", view); }, [view]);
 
   const mine = items.filter(it => it.marketplace === marketplace);
 

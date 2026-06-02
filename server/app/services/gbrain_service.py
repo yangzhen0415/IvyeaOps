@@ -1,4 +1,4 @@
-"""Safe GBrain operations for the ops-hub web UI.
+"""Safe GBrain operations for the IvyeaOps web UI.
 
 This module intentionally exposes a small whitelist around the ``gbrain`` CLI
 and the local markdown source directory. It must never become a generic shell
@@ -19,7 +19,7 @@ def _brain_root() -> Path:
     val = hub_settings.get("brain_root")
     if val:
         return Path(str(val)).resolve()
-    fallback = os.environ.get("OPSHUB_BRAIN_ROOT") or str(Path.home() / "brain")
+    fallback = os.environ.get("IVYEA_OPS_BRAIN_ROOT") or str(Path.home() / "brain")
     return Path(fallback).resolve()
 
 
@@ -42,7 +42,7 @@ def _gbrain_bin() -> str:
     val = hub_settings.get("gbrain_bin")
     if val:
         return str(val)
-    return os.environ.get("OPSHUB_GBRAIN_BIN", "/usr/local/bin/gbrain")
+    return os.environ.get("IVYEA_OPS_GBRAIN_BIN", "/usr/local/bin/gbrain")
 
 
 MAX_QUERY_CHARS = 500

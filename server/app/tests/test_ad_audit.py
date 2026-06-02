@@ -17,9 +17,9 @@ from openpyxl import Workbook, load_workbook
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("OPSHUB_DEV_MODE", "1")
-    monkeypatch.setenv("OPSHUB_ALLOWED_ORIGINS", "https://test.example.com")
-    monkeypatch.setenv("OPSHUB_SECRET", "test-secret")
+    monkeypatch.setenv("IVYEA_OPS_DEV_MODE", "1")
+    monkeypatch.setenv("IVYEA_OPS_ALLOWED_ORIGINS", "https://test.example.com")
+    monkeypatch.setenv("IVYEA_OPS_SECRET", "test-secret")
     # Reload config so the env vars take effect.
     import importlib
     from app.core import config as cfg_mod

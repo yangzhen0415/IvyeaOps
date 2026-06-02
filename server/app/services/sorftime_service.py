@@ -138,7 +138,7 @@ async def _make_client():
                 "params": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "ops-hub", "version": "1.0"},
+                    "clientInfo": {"name": "IvyeaOps", "version": "1.0"},
                 },
             }
             resp = await asyncio.wait_for(

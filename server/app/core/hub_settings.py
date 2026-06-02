@@ -75,7 +75,7 @@ _DEFAULTS: Dict[str, Any] = {
     # Embedded service URLs (frontend iframes)
     "dashboard_url": "",
     "terminal_url": "",
-    # Account — stores new password hash set via UI (overrides OPSHUB_PASSWORD_HASH)
+    # Account — stores new password hash set via UI (overrides IVYEA_OPS_PASSWORD_HASH)
     "password_hash": "",
     # First-run setup wizard completion flag.
     # False/absent = wizard has not been completed; True = skip wizard on next login.
@@ -85,7 +85,7 @@ _DEFAULTS: Dict[str, Any] = {
     # — when off the frontend interceptor and backend engine never fire.
     "autofix_enabled": False,
     # --- External-integration paths ----------------------------------------
-    # Optional: ops-hub works standalone without any of these, but the
+    # Optional: IvyeaOps works standalone without any of these, but the
     # monitor page and agent picker light up when you point at the right
     # binaries / databases.  Leave empty to fall back to PATH lookup or
     # disable the corresponding feature.
@@ -106,32 +106,32 @@ _DEFAULTS: Dict[str, Any] = {
 
 _ENV_MAP: Dict[str, str] = {
     "apimart_key": "APIMART_KEY",
-    "text_ai_providers": "OPSHUB_TEXT_AI_PROVIDERS",
+    "text_ai_providers": "IVYEA_OPS_TEXT_AI_PROVIDERS",
     "sorftime_key": "SORFTIME_KEY",
     "openai_api_key": "OPENAI_API_KEY",
-    "gbrain_bin": "OPSHUB_GBRAIN_BIN",
-    "brain_root": "OPSHUB_BRAIN_ROOT",
-    "alert_webhook": "OPSHUB_ALERT_WEBHOOK",
-    "alert_app_id": "OPSHUB_ALERT_APP_ID",
-    "alert_app_secret": "OPSHUB_ALERT_APP_SECRET",
-    "alert_chat_id": "OPSHUB_ALERT_CHAT_ID",
-    "alert_threshold": "OPSHUB_ALERT_THRESHOLD",
-    "alert_sustain": "OPSHUB_ALERT_SUSTAIN",
-    "alert_cooldown": "OPSHUB_ALERT_COOLDOWN",
+    "gbrain_bin": "IVYEA_OPS_GBRAIN_BIN",
+    "brain_root": "IVYEA_OPS_BRAIN_ROOT",
+    "alert_webhook": "IVYEA_OPS_ALERT_WEBHOOK",
+    "alert_app_id": "IVYEA_OPS_ALERT_APP_ID",
+    "alert_app_secret": "IVYEA_OPS_ALERT_APP_SECRET",
+    "alert_chat_id": "IVYEA_OPS_ALERT_CHAT_ID",
+    "alert_threshold": "IVYEA_OPS_ALERT_THRESHOLD",
+    "alert_sustain": "IVYEA_OPS_ALERT_SUSTAIN",
+    "alert_cooldown": "IVYEA_OPS_ALERT_COOLDOWN",
     # External integrations
-    "hermes_bin": "OPSHUB_HERMES_BIN",
-    "codex_bin": "OPSHUB_CODEX_BIN",
-    "claude_bin": "OPSHUB_CLAUDE_BIN",
-    "kiro_cli_bin": "OPSHUB_KIRO_CLI_BIN",
-    "hermes_db": "OPSHUB_HERMES_DB",
-    "codex_db": "OPSHUB_CODEX_DB",
-    "feishu_codex_db": "OPSHUB_FEISHU_CODEX_DB",
-    "kiro_gateway_db": "OPSHUB_KIRO_GATEWAY_DB",
-    "kiro_cli_db": "OPSHUB_KIRO_CLI_DB",
-    "kiro_cli_sessions_dir": "OPSHUB_KIRO_CLI_SESSIONS_DIR",
-    "claude_projects_dir": "OPSHUB_CLAUDE_PROJECTS_DIR",
-    "hermes_node_bin": "OPSHUB_HERMES_NODE_BIN",
-    "bun_bin": "OPSHUB_BUN_BIN",
+    "hermes_bin": "IVYEA_OPS_HERMES_BIN",
+    "codex_bin": "IVYEA_OPS_CODEX_BIN",
+    "claude_bin": "IVYEA_OPS_CLAUDE_BIN",
+    "kiro_cli_bin": "IVYEA_OPS_KIRO_CLI_BIN",
+    "hermes_db": "IVYEA_OPS_HERMES_DB",
+    "codex_db": "IVYEA_OPS_CODEX_DB",
+    "feishu_codex_db": "IVYEA_OPS_FEISHU_CODEX_DB",
+    "kiro_gateway_db": "IVYEA_OPS_KIRO_GATEWAY_DB",
+    "kiro_cli_db": "IVYEA_OPS_KIRO_CLI_DB",
+    "kiro_cli_sessions_dir": "IVYEA_OPS_KIRO_CLI_SESSIONS_DIR",
+    "claude_projects_dir": "IVYEA_OPS_CLAUDE_PROJECTS_DIR",
+    "hermes_node_bin": "IVYEA_OPS_HERMES_NODE_BIN",
+    "bun_bin": "IVYEA_OPS_BUN_BIN",
 }
 
 

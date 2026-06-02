@@ -7,7 +7,7 @@
 import { useEffect, useRef, Component, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import CloudCLIApp from '../../cloudcli/App';
-import { applyOpsHubTheme } from '../../cloudcli/utils/opsHubTheme';
+import { applyIvyeaOpsTheme } from '../../cloudcli/utils/ivyeaOpsTheme';
 import '../../cloudcli/index.css';
 
 class CcuiBoundary extends Component<{ children: ReactNode }, { err: Error | null }> {
@@ -36,15 +36,15 @@ export default function CloudCLINative() {
 
     // 主题:初始注入 ops 当前主题,并监听 ops 主题切换 —— 注入到 #ccui-root 容器
     const syncTheme = () => {
-      const theme = localStorage.getItem('opshub.theme') || 'dark';
-      applyOpsHubTheme(theme, host);
+      const theme = localStorage.getItem('ivyea-ops.theme') || 'dark';
+      applyIvyeaOpsTheme(theme, host);
     };
     syncTheme();
     const onThemeChange = (e: Event) => {
       const t = (e as CustomEvent<string>).detail;
-      applyOpsHubTheme(typeof t === 'string' ? t : (localStorage.getItem('opshub.theme') || 'dark'), host);
+      applyIvyeaOpsTheme(typeof t === 'string' ? t : (localStorage.getItem('ivyea-ops.theme') || 'dark'), host);
     };
-    window.addEventListener('opshub:theme-changed', onThemeChange);
+    window.addEventListener('ivyea-ops:theme-changed', onThemeChange);
 
     if (!rootRef.current) {
       rootRef.current = createRoot(host);
@@ -55,7 +55,7 @@ export default function CloudCLINative() {
       </CcuiBoundary>,
     );
     return () => {
-      window.removeEventListener('opshub:theme-changed', onThemeChange);
+      window.removeEventListener('ivyea-ops:theme-changed', onThemeChange);
       const r = rootRef.current;
       rootRef.current = null;
       setTimeout(() => r?.unmount(), 0);

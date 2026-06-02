@@ -3,7 +3,7 @@
 
 Auth: registered WITHOUT the router-level ops module dependency (HTTP-cookie
 dependencies don't translate to the WS handshake), so we verify the
-``opshub_session`` cookie manually at accept time via ``verify_session``.
+``ivyea_ops_session`` cookie manually at accept time via ``verify_session``.
 
 Chat (P2): drives the claude CLI via stream-json (see claude_driver). The
 ``claude-command`` handler runs the turn as a background task so the receive

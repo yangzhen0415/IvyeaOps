@@ -17,10 +17,10 @@ def client(tmp_path: Path, monkeypatch):
     (brain / "amazon").mkdir()
     (brain / "amazon" / "note.md").write_text("# Note\n\nAmazon 广告优化\n", encoding="utf-8")
 
-    monkeypatch.setenv("OPSHUB_BRAIN_ROOT", str(brain))
-    monkeypatch.setenv("OPSHUB_BRAIN_CHAT_DB", str(tmp_path / "brain_chat.sqlite3"))
-    monkeypatch.setenv("OPSHUB_SECRET", "test-secret")
-    monkeypatch.setenv("OPSHUB_ALLOWED_ORIGINS", _ORIGIN)
+    monkeypatch.setenv("IVYEA_OPS_BRAIN_ROOT", str(brain))
+    monkeypatch.setenv("IVYEA_OPS_BRAIN_CHAT_DB", str(tmp_path / "brain_chat.sqlite3"))
+    monkeypatch.setenv("IVYEA_OPS_SECRET", "test-secret")
+    monkeypatch.setenv("IVYEA_OPS_ALLOWED_ORIGINS", _ORIGIN)
 
     import importlib
     from app.core import config as cfg_mod

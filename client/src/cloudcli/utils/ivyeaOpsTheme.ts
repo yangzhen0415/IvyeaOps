@@ -22,7 +22,7 @@ type ThemeRaw = {
   fg: string; fgMuted: string; acc: string; light?: true;
 };
 
-// Source colors extracted from ops-hub workbench.css (solid equivalents of rgba values)
+// Source colors extracted from IvyeaOps workbench.css (solid equivalents of rgba values)
 const RAW: Record<string, ThemeRaw> = {
   dark:             { bg:'#0c0c0c', bg1:'#111111', bg2:'#161616', border:'#262626', fg:'#e8e8e8', fgMuted:'#a8a8a8', acc:'#4ade80' },
   'deep-space':     { bg:'#060c18', bg1:'#0a1020', bg2:'#0e1628', border:'#1e2d4a', fg:'#c8deff', fgMuted:'#84a8cc', acc:'#60a5fa' },
@@ -42,7 +42,7 @@ const RAW: Record<string, ThemeRaw> = {
   bordeaux:         { bg:'#0a0308', bg1:'#12050e', bg2:'#1a0816', border:'#320e28', fg:'#f0d0e8', fgMuted:'#b478ac', acc:'#b03280' },
 };
 
-export function applyOpsHubTheme(themeName: string, target?: HTMLElement): void {
+export function applyIvyeaOpsTheme(themeName: string, target?: HTMLElement): void {
   const c = RAW[themeName] ?? RAW['dark'];
   const root = target ?? document.documentElement;
   const isLight = c.light === true;

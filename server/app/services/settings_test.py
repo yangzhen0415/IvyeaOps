@@ -298,7 +298,7 @@ async def _probe_feishu_webhook(url: str) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
             r = await c.post(url, json={
                 "msg_type": "text",
-                "content": {"text": f"ops-hub 配置测试 · {time.strftime('%H:%M:%S')}"},
+                "content": {"text": f"IvyeaOps 配置测试 · {time.strftime('%H:%M:%S')}"},
             })
         if r.status_code == 200:
             try:
@@ -352,7 +352,7 @@ async def _probe_feishu_app() -> Dict[str, Any]:
                 json={
                     "receive_id": chat_id,
                     "msg_type": "text",
-                    "content": json.dumps({"text": f"ops-hub 配置测试 · {time.strftime('%H:%M:%S')}"}, ensure_ascii=False),
+                    "content": json.dumps({"text": f"IvyeaOps 配置测试 · {time.strftime('%H:%M:%S')}"}, ensure_ascii=False),
                 },
             )
         data = r.json()

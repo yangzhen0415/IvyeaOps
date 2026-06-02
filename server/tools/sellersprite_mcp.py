@@ -4,7 +4,7 @@
 Wraps the SellerSprite REST API as MCP tools so Hermes can call
 SellerSprite data the same way it calls SIF or Sorftime.
 
-Registration (done automatically when key is saved in ops-hub settings):
+Registration (done automatically when key is saved in IvyeaOps settings):
     hermes mcp add sellersprite \
         --command python3 /path/to/sellersprite_mcp.py \
         --env SELLERSPRITE_KEY=<your-key>
@@ -32,7 +32,7 @@ def _key() -> str:
     k = os.environ.get("SELLERSPRITE_KEY", "").strip()
     if not k:
         raise RuntimeError(
-            "SELLERSPRITE_KEY 未设置。请在 ops-hub 系统配置页填写卖家精灵密钥并保存。"
+            "SELLERSPRITE_KEY 未设置。请在 IvyeaOps 系统配置页填写卖家精灵密钥并保存。"
         )
     return k
 

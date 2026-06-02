@@ -155,7 +155,7 @@ export function useShellSocket({
         return;
       }
       if (ev.code === 4500) {
-        setState({ kind: "fatal", reason: "agent 进程启动失败（查看 ops-hub 日志）" });
+        setState({ kind: "fatal", reason: "agent 进程启动失败（查看 IvyeaOps 日志）" });
         return;
       }
       // Network / proxy drop — back off and try again.

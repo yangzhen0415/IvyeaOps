@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# ops-hub Dockerfile — with Hermes Agent built-in
+# IvyeaOps Dockerfile — with Hermes Agent built-in
 # ═══════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Frontend build ────────────────────────────────────────
@@ -31,7 +31,7 @@ RUN if [ -d /opt/hermes-agent ]; then \
         ln -sf /opt/hermes-agent/venv/bin/hermes /usr/local/bin/hermes; \
     fi
 
-# Python dependencies for ops-hub
+# Python dependencies for IvyeaOps
 COPY server/requirements.txt ./server/requirements.txt
 RUN pip install --no-cache-dir -r server/requirements.txt
 
@@ -45,9 +45,9 @@ COPY --from=frontend-build /build/dist /app/client/dist
 COPY deploy/docker/nginx.conf /etc/nginx/nginx.conf
 
 # Default environment
-ENV OPSHUB_DATA_DIR=/app/data
-ENV OPSHUB_HOST=0.0.0.0
-ENV OPSHUB_PORT=8001
+ENV IVYEA_OPS_DATA_DIR=/app/data
+ENV IVYEA_OPS_HOST=0.0.0.0
+ENV IVYEA_OPS_PORT=8001
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/server
 ENV HOME=/root

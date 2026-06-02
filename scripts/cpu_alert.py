@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""ops-hub CPU watchdog — alerts on sustained high CPU.
+"""IvyeaOps CPU watchdog — alerts on sustained high CPU.
 
 Runs out-of-process (cron, every minute) so it can detect the very thing
-that would prevent ops-hub from monitoring itself: a CPU-bound runaway
+that would prevent IvyeaOps from monitoring itself: a CPU-bound runaway
 inside the uvicorn event loop. The systemd watchdog catches the worst
 case (process is unresponsive); this catches the slower kind where the
 process is "alive" but burning CPU on a tight loop.
 
 Logic:
-  1. Resolve the ops-hub MainPID via systemd
+  1. Resolve the IvyeaOps MainPID via systemd
   2. Sample %CPU using two /proc/<pid>/stat reads ~3s apart
-  3. Append the sample (timestamp, %cpu) to /tmp/ops-hub-cpu-history.json
+  3. Append the sample (timestamp, %cpu) to /tmp/IvyeaOps-cpu-history.json
      keeping only the last SUSTAIN_MIN minutes of samples
   4. If every sample in the window is above THRESHOLD_PCT, push an alert
   5. After alerting, wait COOLDOWN_MIN before the next push
@@ -19,7 +19,7 @@ Two delivery channels, tried in order:
   A) Custom-bot webhook   (simple but needs keyword/signature setup)
   B) Feishu App API       (uses self-built app credentials)
 
-Configuration source (single source of truth = ops-hub hub_settings.json,
+Configuration source (single source of truth = IvyeaOps hub_settings.json,
 written via the web UI's 系统配置 page). Keys consulted:
 
   alert_webhook       Custom-bot webhook URL (channel A)
@@ -31,13 +31,13 @@ written via the web UI's 系统配置 page). Keys consulted:
   alert_cooldown      Minutes between alerts (default 30)
 
 If a key is empty in hub_settings.json we fall back to the corresponding
-env var (OPSHUB_ALERT_*), then to an optional Hermes .env file for the
+env var (IVYEA_OPS_ALERT_*), then to an optional Hermes .env file for the
 Feishu trio (FEISHU_APP_ID/FEISHU_APP_SECRET/FEISHU_HOME_CHANNEL) — that
 fallback is purely a convenience for installs that co-host Hermes and
 can be ignored everywhere else.
 
 Cron entry (one minute interval):
-  * * * * * /usr/bin/python3 /root/ops-hub/scripts/cpu_alert.py
+  * * * * * /usr/bin/python3 /root/ivyea-ops/scripts/cpu_alert.py
 """
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "server"))
 
-STATE_PATH = Path("/tmp/ops-hub-cpu-history.json")
+STATE_PATH = Path("/tmp/IvyeaOps-cpu-history.json")
 HERMES_ENV_PATH = Path(os.environ.get("HERMES_ENV", "/root/.hermes/.env"))
 SAMPLE_GAP_S = 3.0  # how far apart the two /proc/stat snapshots are
 
@@ -123,7 +123,7 @@ COOLDOWN_MIN = int(_hub_setting("alert_cooldown") or "30")
 def _systemd_main_pid() -> int | None:
     try:
         out = subprocess.check_output(
-            ["systemctl", "show", "-p", "MainPID", "--value", "ops-hub.service"],
+            ["systemctl", "show", "-p", "MainPID", "--value", "ivyea-ops.service"],
             text=True,
             timeout=5,
         ).strip()
@@ -309,7 +309,7 @@ def main() -> int:
             print("\nNo channel is fully configured — aborting.")
             return 2
         msg = (
-            f"✅ ops-hub 告警通道测试\n"
+            f"✅ IvyeaOps 告警通道测试\n"
             f"主机: {_hostname()}\n"
             f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"如果你看到这条消息，说明告警链路通畅。"
@@ -356,12 +356,12 @@ def main() -> int:
         peak = max(s["cpu"] for s in in_window)
         avg = sum(s["cpu"] for s in in_window) / len(in_window)
         msg = (
-            f"⚠️ ops-hub CPU 持续高位\n"
+            f"⚠️ IvyeaOps CPU 持续高位\n"
             f"主机: {_hostname()}\n"
             f"PID:  {pid}\n"
             f"窗口: 最近 {SUSTAIN_MIN} 分钟\n"
             f"CPU%: avg={avg:.1f}%, peak={peak:.1f}% (阈值 {THRESHOLD_PCT:.0f}%)\n"
-            f"建议: 立即检查 journalctl -u ops-hub --since '10 min ago'"
+            f"建议: 立即检查 journalctl -u ivyea-ops --since '10 min ago'"
         )
         ok, _channel = _push(msg)
         if ok:

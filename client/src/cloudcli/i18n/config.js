@@ -87,8 +87,8 @@ import itTasks from './locales/it/tasks.json';
 import { languages } from './languages.js';
 
 // Get saved language preference from localStorage
-// Use 'opshub_lang' key to avoid reading stale 'userLanguage: en' from old installs
-const LANG_KEY = 'opshub_lang';
+// Use 'ivyea_ops_lang' key to avoid reading stale 'userLanguage: en' from old installs
+const LANG_KEY = 'ivyea_ops_lang';
 const getSavedLanguage = () => {
   try {
     const saved = localStorage.getItem(LANG_KEY);
@@ -180,7 +180,7 @@ i18n
       },
     },
 
-    // Default language — zh-CN for ops-hub integration
+    // Default language — zh-CN for IvyeaOps integration
     lng: getSavedLanguage(),
 
     // Fallback language when a translation is missing

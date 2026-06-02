@@ -18,7 +18,7 @@ from typing import Any
 from app.core.config import settings
 from app.services import gbrain_service as gb
 
-DB_PATH = Path(os.environ.get("OPSHUB_BRAIN_CHAT_DB", str(settings.data_dir / "brain_chat.sqlite3")))
+DB_PATH = Path(os.environ.get("IVYEA_OPS_BRAIN_CHAT_DB", str(settings.data_dir / "brain_chat.sqlite3")))
 MAX_UPLOAD_BYTES = int(os.environ.get("BRAIN_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
 ALLOWED_UPLOAD_EXTS = {".md", ".txt", ".csv", ".json", ".xlsx", ".pdf"}
 ALLOWED_CATEGORIES = {"inbox", "amazon", "products", "market", "ads", "compliance", "suppliers"}
@@ -295,7 +295,7 @@ def _call_hermes_json(prompt: str, timeout: int = 90) -> dict[str, Any] | None:
     if os.environ.get("BRAIN_INGEST_DISABLE_HERMES", "").lower() in {"1", "true", "yes"}:
         return None
     hermes = _hermes_bin()
-    cmd = [hermes, "chat", "-q", prompt, "-Q", "--source", "ops-hub-web-brain-ingest", "--max-turns", "1", "--toolsets", ""]
+    cmd = [hermes, "chat", "-q", prompt, "-Q", "--source", "IvyeaOps-web-brain-ingest", "--max-turns", "1", "--toolsets", ""]
     proc = subprocess.run(
         cmd,
         cwd=str(gb.BRAIN_ROOT),
@@ -320,7 +320,7 @@ def analyze_pasted_text(text: str) -> dict[str, Any]:
     analysis: dict[str, Any] | None = None
     prompt = textwrap.dedent(
         f"""\
-        你是 ops-hub 私有知识库的入库分类器。不要调用任何工具，不要解释，只返回严格 JSON。
+        你是 IvyeaOps 私有知识库的入库分类器。不要调用任何工具，不要解释，只返回严格 JSON。
 
         请分析用户粘贴的文本，自动生成：
         - title: 适合做 Markdown 标题的中文短标题，最多 40 字
@@ -698,7 +698,7 @@ def _messages_to_hermes_prompt(messages: list[dict[str, str]]) -> str:
     user = "\n\n".join(m.get("content", "") for m in messages if m.get("role") == "user").strip()
     return textwrap.dedent(
         f"""\
-        你正在作为 ops-hub Web 知识库对话的回答引擎。
+        你正在作为 IvyeaOps Web 知识库对话的回答引擎。
         重要限制：这不是开发任务，不要执行工具、命令、文件读写、联网搜索或系统操作；只基于下面提供的知识库片段和用户问题生成最终回答。
 
         {system}
@@ -727,7 +727,7 @@ def _call_llm(messages: list[dict[str, str]]) -> str:
         prompt,
         "-Q",
         "--source",
-        "ops-hub-web-brain",
+        "IvyeaOps-web-brain",
         "--max-turns",
         "1",
         "--toolsets",

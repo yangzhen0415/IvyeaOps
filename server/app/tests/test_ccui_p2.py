@@ -67,8 +67,8 @@ def _fake_permission(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("OPSHUB_SECRET", "test-secret")
-    monkeypatch.setenv("OPSHUB_ALLOWED_ORIGINS", _ORIGIN)
+    monkeypatch.setenv("IVYEA_OPS_SECRET", "test-secret")
+    monkeypatch.setenv("IVYEA_OPS_ALLOWED_ORIGINS", _ORIGIN)
     monkeypatch.setenv("CCUI_DB_PATH", str(tmp_path / "ccui.db"))
     from app.core import config as cfg_mod
     importlib.reload(cfg_mod)

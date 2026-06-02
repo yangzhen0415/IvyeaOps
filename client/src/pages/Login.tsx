@@ -41,7 +41,7 @@ export default function Login() {
     <div className="login-wrap">
       <form className="login-box" onSubmit={onSubmit}>
         <div className="mark">OPS WORKBENCH</div>
-        <h1>{isReg ? <>注册账号 · <b>ops-hub</b></> : <>欢迎回来 · <b>ops-hub</b></>}</h1>
+        <h1>{isReg ? <>注册账号 · <b>IvyeaOps</b></> : <>欢迎回来 · <b>IvyeaOps</b></>}</h1>
 
         <label>{isReg ? "邮箱" : "账号 / 邮箱"}</label>
         <input

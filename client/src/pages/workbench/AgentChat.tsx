@@ -23,7 +23,7 @@ type ViewMode = "chat" | "cli" | "files";
 // Top-level page for the multi-agent hub.
 //
 // Layout: three columns inside a single bordered shell, matching the rest
-// of ops-hub (workbench.css design tokens, dark green-accent terminal look).
+// of IvyeaOps (workbench.css design tokens, dark green-accent terminal look).
 //   left:   session tree + new-session action
 //   center: tabs (chat | cli) for the active session
 //   right:  meta panel (agent / model / branch / compact actions)

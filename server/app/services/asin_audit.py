@@ -6,7 +6,7 @@ persisted to disk so we can serve historical results after restarts.
 
 Design:
 - One job at a time (asyncio.Lock) — user is a single-seat operator
-- Each job gets ~/.hermes/ops-hub-data/amazon-audits/<job_id>/
+- Each job gets ~/.hermes/ivyea-ops-data/amazon-audits/<job_id>/
   - meta.json   (status, asin, marketplace, timestamps, error)
   - report.md   (raw claude markdown output — final)
   - report.json (parsed structured section, if claude complied)
@@ -42,7 +42,7 @@ from app.services.runners import (  # noqa: F401 — re-exported for tests
     runner_status,
 )
 
-AUDIT_ROOT = Path.home() / ".hermes" / "ops-hub-data" / "amazon-audits"
+AUDIT_ROOT = Path.home() / ".hermes" / "ivyea-ops-data" / "amazon-audits"
 
 _log = logging.getLogger(__name__)
 AUDIT_ROOT.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 """Shared agent-runner helpers used by audit services.
 
-The ops-hub workbench spawns agent CLIs (hermes / codex / claude) as
+The IvyeaOps workbench spawns agent CLIs (hermes / codex / claude) as
 subprocesses to execute skills. Both the ASIN audit and the ad-report audit
 share the same runner selection and invocation logic, so we lift it into a
 standalone module.

@@ -30,7 +30,7 @@ from app.core.config import settings
 
 DB_PATH = Path(
     os.environ.get(
-        "OPSHUB_AGENT_SESSIONS_DB",
+        "IVYEA_OPS_AGENT_SESSIONS_DB",
         str(settings.data_dir / "agent_sessions.sqlite3"),
     )
 )

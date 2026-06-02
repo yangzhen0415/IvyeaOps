@@ -1,4 +1,4 @@
-"""GBrain web API for the ops-hub knowledge base UI."""
+"""GBrain web API for the IvyeaOps knowledge base UI."""
 from __future__ import annotations
 
 from typing import Any
@@ -151,7 +151,7 @@ async def ingest_url(body: IngestUrlBody) -> dict[str, Any]:
 
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            resp = await client.get(body.url, headers={"User-Agent": "Mozilla/5.0 (compatible; OpsHub/1.0)"})
+            resp = await client.get(body.url, headers={"User-Agent": "Mozilla/5.0 (compatible; IvyeaOps/1.0)"})
             resp.raise_for_status()
             html = resp.text
     except Exception as e:
@@ -198,7 +198,7 @@ async def ingest_url(body: IngestUrlBody) -> dict[str, Any]:
             prompt,
             "-Q",
             "--source",
-            "ops-hub-web-brain-url-ingest",
+            "IvyeaOps-web-brain-url-ingest",
             "--max-turns",
             "1",
             "--toolsets",

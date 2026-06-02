@@ -185,7 +185,7 @@ def snapshot(_user: str = Depends(require_user)) -> Snapshot:
 # Which systemd services to monitor. Tweak to taste.
 _WATCHED_SERVICES = [
     "nginx",
-    "ops-hub",
+    "IvyeaOps",
     "xray",
     "hysteria-server",
     "feishu-codex-relay",
@@ -198,8 +198,8 @@ _WATCHED_SERVICES = [
 
 _SERVICE_CATALOG: dict[str, tuple[str, str, str]] = {
     "nginx": ("公网入口与 HTTPS 反向代理，承载 ops/term/cli 等域名转发", "critical", "停止后所有 Web 页面、API 与终端入口不可访问"),
-    "ops-hub": ("当前运维控制台后端与静态页面服务", "critical", "停止后本控制台不可用"),
-    "xray": ("Xray 代理服务，提供一组备用代理链路", "optional", "对应代理不可用，不影响 ops-hub 本身"),
+    "IvyeaOps": ("当前运维控制台后端与静态页面服务", "critical", "停止后本控制台不可用"),
+    "xray": ("Xray 代理服务，提供一组备用代理链路", "optional", "对应代理不可用，不影响 IvyeaOps 本身"),
     "hysteria-server": ("Hysteria 代理服务，高速 UDP 代理入口", "optional", "对应代理不可用，不影响 Web 控制台"),
     "feishu-codex-relay": ("飞书消息与 Codex/AI 会话中继服务", "on-demand", "飞书侧 AI 对话和转发停止"),
     "warp-svc": ("Cloudflare WARP 客户端，用于出站网络代理/绕路", "optional", "WARP 出站链路不可用，通常不影响核心服务"),
@@ -277,11 +277,11 @@ _PROC_CATALOG: dict[str, tuple[str, str, str]] = {
     "agetty": ("终端登录管理", "critical", "控制台无法登录"),
     "chronyd": ("NTP时间同步", "critical", "系统时间不准确"),
     "iscsid": ("iSCSI存储服务", "critical", "云盘可能断开"),
-    "ops-hub": ("运维控制台后端", "critical", "当前管理面板不可用"),
+    "IvyeaOps": ("运维控制台后端", "critical", "当前管理面板不可用"),
     # ── 按需运行 ──
     "hermes": ("Hermes AI助手主进程", "on-demand", "AI对话/飞书机器人停止，不影响网站"),
     "agy": ("Antigravity AI终端", "on-demand", "Antigravity CLI 操作停止"),
-    "python": ("Hermes/ops-hub Python进程", "on-demand", "对应服务停止"),
+    "python": ("Hermes/IvyeaOps Python进程", "on-demand", "对应服务停止"),
     "tsserver": ("TypeScript语言服务器", "on-demand", "代码补全/检查停止，省~150MB/个"),
     "pyright": ("Python语言服务器", "on-demand", "Python代码检查停止，省~60MB"),
     "lark-cli": ("飞书CLI(消息转发)", "on-demand", "飞书消息转发停止"),
@@ -351,7 +351,7 @@ _CMDLINE_IDENTIFY: list[tuple[str, str, str, str, str]] = [
     ("lark-cli", "飞书CLI", "飞书命令行工具", "on-demand", "飞书消息转发停止"),
     ("web-terminal/server.cjs", "Web终端插件", "Claude Code UI终端", "on-demand", "Web终端不可用"),
     ("main.py --port", "Kiro Gateway", "本地AI API代理", "on-demand", "AI API代理不可用"),
-    ("uvicorn", "ops-hub后端", "运维面板API服务", "critical", "当前管理面板不可用"),
+    ("uvicorn", "IvyeaOps后端", "运维面板API服务", "critical", "当前管理面板不可用"),
     ("next-server", "imgflow前端", "图片工作流Next.js前端", "on-demand", "图片工作流前端不可用"),
     ("gbrain serve", "GBrain MCP", "GBrain 知识库 MCP 服务", "on-demand", "Hermes 无法调用知识库"),
     ("gbrain", "GBrain", "GBrain 知识库进程", "on-demand", "知识库功能不可用"),

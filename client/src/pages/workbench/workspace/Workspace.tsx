@@ -21,8 +21,8 @@ type Selection = {
   sessionSource: string | null;  // "hub" | "claude" | "codex"
 };
 
-const SELECTION_KEY = "opshub-workspace-selection-v1";
-const TAB_KEY = "opshub-workspace-active-tab";
+const SELECTION_KEY = "ivyea-ops-workspace-selection-v1";
+const TAB_KEY = "ivyea-ops-workspace-active-tab";
 
 /**
  * Workspace — top-level page that replaces AgentChat in Phase B.
@@ -62,7 +62,7 @@ export default function Workspace() {
   const [qsAnchor, setQsAnchor] = useState<DOMRect | null>(null);   // null = closed
   const [mcpOpen, setMcpOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
-    try { return localStorage.getItem("opshub-workspace-onboarded") !== "1"; }
+    try { return localStorage.getItem("ivyea-ops-workspace-onboarded") !== "1"; }
     catch { return false; }
   });
   const [error, setError] = useState<string | null>(null);
@@ -109,9 +109,9 @@ export default function Workspace() {
   // On mount: read pending jump request from sessionStorage
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem("opshub-jump-session");
+      const raw = sessionStorage.getItem("ivyea-ops-jump-session");
       if (raw) {
-        sessionStorage.removeItem("opshub-jump-session");
+        sessionStorage.removeItem("ivyea-ops-jump-session");
         jumpRef.current = JSON.parse(raw);
       }
     } catch {}

@@ -433,7 +433,7 @@ async def _call_agent_runner(runner: str, prompt: str, timeout: int) -> str:
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
-        cwd=os.environ.get("OPSHUB_LISTING_AI_CWD", "/root"),
+        cwd=os.environ.get("IVYEA_OPS_LISTING_AI_CWD", "/root"),
         env=env,
     )
     try:
@@ -458,8 +458,8 @@ async def _call_agent_runner(runner: str, prompt: str, timeout: int) -> str:
 
 async def _call_ai(prompt: str, max_tokens: int = 2000, web_search: bool = True) -> str:
     """Call the currently available local agent CLIs: Hermes → Codex."""
-    timeout = int(os.environ.get("OPSHUB_LISTING_AI_TIMEOUT", "180"))
-    runner_order = [x.strip().lower() for x in os.environ.get("OPSHUB_LISTING_AI_RUNNERS", "hermes,codex").split(",") if x.strip()]
+    timeout = int(os.environ.get("IVYEA_OPS_LISTING_AI_TIMEOUT", "180"))
+    runner_order = [x.strip().lower() for x in os.environ.get("IVYEA_OPS_LISTING_AI_RUNNERS", "hermes,codex").split(",") if x.strip()]
     runner_order = [x for x in runner_order if x in ("hermes", "codex")]
     if not runner_order:
         runner_order = ["hermes", "codex"]

@@ -45,17 +45,17 @@ from app.services import agent_session_service as svc
 # ---------------------------------------------------------------------------
 # Tunables
 # ---------------------------------------------------------------------------
-MAX_LIVE_PTYS = int(os.environ.get("OPSHUB_MAX_PTYS", "5"))
-IDLE_RECYCLE_SECS = int(os.environ.get("OPSHUB_PTY_IDLE_SECS", str(30 * 60)))
-RING_BYTES = int(os.environ.get("OPSHUB_PTY_RING_BYTES", str(256 * 1024)))
-PERSIST_FLUSH_MS = int(os.environ.get("OPSHUB_PTY_FLUSH_MS", "250"))
+MAX_LIVE_PTYS = int(os.environ.get("IVYEA_OPS_MAX_PTYS", "5"))
+IDLE_RECYCLE_SECS = int(os.environ.get("IVYEA_OPS_PTY_IDLE_SECS", str(30 * 60)))
+RING_BYTES = int(os.environ.get("IVYEA_OPS_PTY_RING_BYTES", str(256 * 1024)))
+PERSIST_FLUSH_MS = int(os.environ.get("IVYEA_OPS_PTY_FLUSH_MS", "250"))
 READ_CHUNK = 8192
 # Circuit-breaker: if the reader callback fires this many times in a row
 # without progress (zero-byte reads or os-level errors), the session is
 # torn down. Picked conservatively — even a busy agent rarely produces
 # more than a few hundred chunks per second per stream, and progress
 # resets the counter, so a healthy 1 MB/s stream is fine.
-RUNAWAY_ITERS = int(os.environ.get("OPSHUB_PTY_RUNAWAY_ITERS", "256"))
+RUNAWAY_ITERS = int(os.environ.get("IVYEA_OPS_PTY_RUNAWAY_ITERS", "256"))
 
 ANSI_STRIP_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]|\x1B\][^\x07]*\x07|\x1B[=>]")
 CR_NL_RE = re.compile(r"\r\n?")

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { streamChat, type ChatMsg } from "../../api/assistant";
 import { MarkdownReport } from "../../lib/reportFormat";
 
-const STORAGE = "opshub-assistant-chat";
-const SESSIONS_KEY = "opshub-assistant-sessions";
-const CURRENT_ID_KEY = "opshub-assistant-current-id";
+const STORAGE = "ivyea-ops-assistant-chat";
+const SESSIONS_KEY = "ivyea-ops-assistant-sessions";
+const CURRENT_ID_KEY = "ivyea-ops-assistant-current-id";
 const MAX_SESSIONS = 50;
 
 interface Turn { role: "user" | "assistant"; content: string }

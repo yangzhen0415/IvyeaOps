@@ -1,12 +1,12 @@
 # External integrations
 
-ops-hub runs standalone. The features below are *optional*: configure
+IvyeaOps runs standalone. The features below are *optional*: configure
 them only if you've installed the corresponding tool on the same host.
 
 All integration paths are configured via:
 
 - the web UI at `系统配置 → 外部集成路径`, **or**
-- the matching `OPSHUB_*` env in `server/.env` as a fallback.
+- the matching `IVYEA_OPS_*` env in `server/.env` as a fallback.
 
 The UI's **系统健康状态** panel shows which integrations are live.
 

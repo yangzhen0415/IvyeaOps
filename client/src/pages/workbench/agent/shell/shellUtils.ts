@@ -1,6 +1,6 @@
 // Shell utilities — message parsing, ANSI helpers.
 // Mirrors patterns from siteboon/claudecodeui's shell/utils, adapted to
-// ops-hub's WS message shape ({type:'snapshot'|'output'|'exit'|'error'|'pong'}).
+// IvyeaOps's WS message shape ({type:'snapshot'|'output'|'exit'|'error'|'pong'}).
 
 const OSC_COLOR_REPLY = /\x1b\](10|11);(?:rgb:[0-9a-fA-F/]+|\?)(?:\x07|\x1b\\)/g;
 const BARE_OSC_COLOR_REPLY = /\](10|11);rgb:[0-9a-fA-F/]+/g;

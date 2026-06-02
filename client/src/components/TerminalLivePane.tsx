@@ -288,7 +288,7 @@ export default function TerminalLivePane({ session, onExit, onLiveOutput }: Prop
 
       connect();
 
-      term._opshubCleanup = () => {
+      term._ivyeaOpsCleanup = () => {
         window.removeEventListener("resize", onResize);
         ro.disconnect();
         if (delayedResizeTimerRef.current !== null) {
@@ -314,7 +314,7 @@ export default function TerminalLivePane({ session, onExit, onLiveOutput }: Prop
       const t = termRef.current;
       if (t) {
         try {
-          t._opshubCleanup?.();
+          t._ivyeaOpsCleanup?.();
           t.dispose();
         } catch {
           // ignore

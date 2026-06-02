@@ -16,8 +16,8 @@ _HDR = {"Origin": _ORIGIN}
 @pytest.fixture
 def ctx(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "ccui.db"
-    monkeypatch.setenv("OPSHUB_SECRET", "test-secret")
-    monkeypatch.setenv("OPSHUB_ALLOWED_ORIGINS", _ORIGIN)
+    monkeypatch.setenv("IVYEA_OPS_SECRET", "test-secret")
+    monkeypatch.setenv("IVYEA_OPS_ALLOWED_ORIGINS", _ORIGIN)
     monkeypatch.setenv("CCUI_DB_PATH", str(db_path))
 
     # Isolate HOME so the projects-list synchronizer scans an empty ~/.claude

@@ -210,7 +210,7 @@ export default function QuickSettings({
         <div className="qs-section-title">项目数据源</div>
         <div className="qs-faint">
           每 30 秒服务端会缓存项目列表。本地刷新会重扫 <code>~/.claude/projects</code>、
-          <code>~/.codex/sessions</code> 和 ops-hub 自身的 agent_sessions 表。
+          <code>~/.codex/sessions</code> 和 IvyeaOps 自身的 agent_sessions 表。
         </div>
         <button className="tbtn" onClick={refresh} disabled={refreshing} style={{ marginTop: 8 }}>
           {refreshing ? "刷新中…" : "↻ 重扫项目"}

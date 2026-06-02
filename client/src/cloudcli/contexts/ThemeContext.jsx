@@ -14,18 +14,18 @@ export const ThemeProvider = ({ children }) => {
   // 跟随 ops 主题明暗:ops 的 'light'(月岩)为浅色,其余皆暗色。
   // 这样 cloudcli 大量的 `text-gray-900 dark:text-gray-100` 明暗配对会自动适配。
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    try { return (localStorage.getItem('opshub.theme') || 'dark') !== 'light'; }
+    try { return (localStorage.getItem('ivyea-ops.theme') || 'dark') !== 'light'; }
     catch { return true; }
   });
 
   // 监听 ops 主题切换,实时更新明暗
   useEffect(() => {
     const onTheme = (e) => {
-      const t = (e && e.detail) || localStorage.getItem('opshub.theme') || 'dark';
+      const t = (e && e.detail) || localStorage.getItem('ivyea-ops.theme') || 'dark';
       setIsDarkMode(t !== 'light');
     };
-    window.addEventListener('opshub:theme-changed', onTheme);
-    return () => window.removeEventListener('opshub:theme-changed', onTheme);
+    window.addEventListener('ivyea-ops:theme-changed', onTheme);
+    return () => window.removeEventListener('ivyea-ops:theme-changed', onTheme);
   }, []);
 
   // 只在 #ccui-root 容器上加/移 .dark,绝不碰 ops 的 <html>。

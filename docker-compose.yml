@@ -1,17 +1,17 @@
 services:
   app:
     build: .
-    container_name: ops-hub
+    container_name: ivyea-ops
     restart: unless-stopped
     ports:
       - "${PORT:-8080}:80"
     volumes:
-      - ops-hub-data:/app/data
+      - ivyea-ops-data:/app/data
     env_file:
       - .env
     environment:
-      - OPSHUB_DATA_DIR=/app/data
+      - IVYEA_OPS_DATA_DIR=/app/data
 
 volumes:
-  ops-hub-data:
+  ivyea-ops-data:
     driver: local

@@ -27,7 +27,7 @@ export interface HubSettings {
   // AI synthesis (Apimart for images)
   apimart_key: string;
   apimart_base: string;
-  // Comma-separated text-AI fallback order for ops-hub internal synthesis
+  // Comma-separated text-AI fallback order for IvyeaOps internal synthesis
   text_ai_providers: string;
   // Market data
   sorftime_key: string;

@@ -35,7 +35,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import { getSettings } from "../../api/settings";
 
 const LEGACY_SESSION_ID = "__legacy_ttyd__";
-const STORAGE_KEY = "opshub-terminal-current-session";
+const STORAGE_KEY = "ivyea-ops-terminal-current-session";
 const HISTORY_INITIAL_LIMIT = 300;
 const HISTORY_LOAD_MORE_LIMIT = 400;
 const LEGACY_SNAPSHOT_REFRESH_MS = 30_000;

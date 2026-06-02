@@ -96,7 +96,7 @@ export default function MainLayout() {
     .filter((sec) => sec.items.length > 0);
 
   // Pinned skill tools → dynamic sidebar entries. Refreshed on mount and when
-  // a tool is pinned/unpinned (SkillTools dispatches 'opshub:pinned-changed').
+  // a tool is pinned/unpinned (SkillTools dispatches 'ivyea-ops:pinned-changed').
   const [pinnedTools, setPinnedTools] = useState<{ name: string; icon: string; label: string }[]>([]);
   useEffect(() => {
     let alive = true;
@@ -113,8 +113,8 @@ export default function MainLayout() {
     };
     load();
     const onChange = () => load();
-    window.addEventListener("opshub:pinned-changed", onChange);
-    return () => { alive = false; window.removeEventListener("opshub:pinned-changed", onChange); };
+    window.addEventListener("ivyea-ops:pinned-changed", onChange);
+    return () => { alive = false; window.removeEventListener("ivyea-ops:pinned-changed", onChange); };
   }, []);
 
   const [termMounted, setTermMounted] = useState(false);
@@ -176,7 +176,7 @@ export default function MainLayout() {
     "bordeaux":     "#b03280",
   };
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem("opshub.theme") as Theme | null;
+    const saved = localStorage.getItem("ivyea-ops.theme") as Theme | null;
     return THEMES.includes(saved as any) ? saved! : "dark";
   });
   const [themePicker, setThemePicker] = useState(false);
@@ -196,7 +196,7 @@ export default function MainLayout() {
     return () => document.removeEventListener("mousedown", handler);
   }, [themePicker]);
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem("opshub.sidebar.collapsed") === "1" || window.innerWidth <= 680,
+    () => localStorage.getItem("ivyea-ops.sidebar.collapsed") === "1" || window.innerWidth <= 680,
   );
   const [mobileMenu, setMobileMenu] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 900);
@@ -236,15 +236,15 @@ export default function MainLayout() {
   const selectTheme = (t: Theme) => {
     setTheme(t);
     document.documentElement.setAttribute("data-theme", t);
-    localStorage.setItem("opshub.theme", t);
+    localStorage.setItem("ivyea-ops.theme", t);
     setThemePicker(false);
-    window.dispatchEvent(new CustomEvent("opshub:theme-changed", { detail: t }));
+    window.dispatchEvent(new CustomEvent("ivyea-ops:theme-changed", { detail: t }));
   };
 
   const toggleSidebar = () => {
     const next = !collapsed;
     setCollapsed(next);
-    localStorage.setItem("opshub.sidebar.collapsed", next ? "1" : "0");
+    localStorage.setItem("ivyea-ops.sidebar.collapsed", next ? "1" : "0");
   };
 
   const handleLogout = async () => {

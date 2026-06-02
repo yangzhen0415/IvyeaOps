@@ -1,6 +1,6 @@
 # Rendered by scripts/render-deploy.sh from deploy/install.conf.
 # Install:
-#   sudo cp deploy/dist/nginx/ops-hub.conf /etc/nginx/conf.d/
+#   sudo cp deploy/dist/nginx/ivyea-ops.conf /etc/nginx/conf.d/
 #   sudo nginx -t && sudo systemctl reload nginx
 #
 # Certbot:
@@ -9,7 +9,7 @@
 # Rate-limit zone for the login endpoint. 10 r/m per client IP is well above
 # any legitimate human retry rate but low enough to blunt credential-stuffing.
 # 10m of shared memory tracks ~160k unique IPs, more than enough.
-limit_req_zone $binary_remote_addr zone=opshub_login:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=ivyeaops_login:10m rate=10r/m;
 
 # --- HTTP → HTTPS redirect ---
 server {
@@ -43,7 +43,7 @@ server {
     # Internal auth check for protected subresources on this same origin.
     location = /_auth {
         internal;
-        proxy_pass http://127.0.0.1:${OPSHUB_PORT}/api/auth/verify;
+        proxy_pass http://127.0.0.1:${IVYEA_OPS_PORT}/api/auth/verify;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header Host $host;
@@ -55,9 +55,9 @@ server {
     # burst=5 nodelay allows a small flurry (form resubmit, double-click)
     # before returning 429.
     location = /api/auth/login {
-        limit_req zone=opshub_login burst=5 nodelay;
+        limit_req zone=ivyeaops_login burst=5 nodelay;
         limit_req_status 429;
-        proxy_pass http://127.0.0.1:${OPSHUB_PORT};
+        proxy_pass http://127.0.0.1:${IVYEA_OPS_PORT};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -68,15 +68,15 @@ server {
     # Force download with correct MIME so mobile browsers install the apk
     # instead of displaying gibberish.
     location ~* \.apk$ {
-        proxy_pass http://127.0.0.1:${OPSHUB_PORT};
+        proxy_pass http://127.0.0.1:${IVYEA_OPS_PORT};
         default_type application/vnd.android.package-archive;
-        add_header Content-Disposition 'attachment; filename="ops-hub.apk"';
+        add_header Content-Disposition 'attachment; filename="ivyea-ops.apk"';
     }
 
-    # --- ops-hub: everything by default ---
-    # FastAPI serves both /api/* and the built React SPA on 127.0.0.1:${OPSHUB_PORT}.
+    # --- IvyeaOps: everything by default ---
+    # FastAPI serves both /api/* and the built React SPA on 127.0.0.1:${IVYEA_OPS_PORT}.
     location / {
-        proxy_pass http://127.0.0.1:${OPSHUB_PORT};
+        proxy_pass http://127.0.0.1:${IVYEA_OPS_PORT};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -122,7 +122,7 @@ server {
     # === OPTIONAL: amazon-image-workflow at /imgflow ===
     # Delete these three blocks if you don't run the imgflow service.
     location = /imgflow {
-        proxy_pass http://127.0.0.1:${OPSHUB_PORT};
+        proxy_pass http://127.0.0.1:${IVYEA_OPS_PORT};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

@@ -18,8 +18,8 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     # Redirect audit root to a tmp dir so tests don't pollute real data.
-    monkeypatch.setenv("OPSHUB_DEV_MODE", "1")
-    monkeypatch.setenv("OPSHUB_AUTH_DISABLED", "1")
+    monkeypatch.setenv("IVYEA_OPS_DEV_MODE", "1")
+    monkeypatch.setenv("IVYEA_OPS_AUTH_DISABLED", "1")
     # Import lazily so env vars take effect.
     from app.main import app
     from app.services import asin_audit

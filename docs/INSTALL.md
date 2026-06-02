@@ -12,8 +12,8 @@ sudo dnf install -y python3 python3-pip nodejs nginx certbot \
 
 # Pick a place for the repo and clone
 sudo mkdir -p /opt && cd /opt
-git clone https://github.com/YOUR_USERNAME/ops-hub.git
-cd ops-hub
+git clone https://github.com/YOUR_USERNAME/IvyeaOps.git
+cd IvyeaOps
 ```
 
 ## 1. Backend
@@ -29,20 +29,20 @@ Generate secrets:
 cp .env.example .env
 
 # Session signing key
-python3 -c "import secrets; print('OPSHUB_SECRET=' + secrets.token_urlsafe(32))"
+python3 -c "import secrets; print('IVYEA_OPS_SECRET=' + secrets.token_urlsafe(32))"
 # Paste the line into .env
 
 # Admin password
 PYTHONPATH=. python3 -m app.core.hashpw
-# Paste the OPSHUB_PASSWORD_HASH=... line into .env
+# Paste the IVYEA_OPS_PASSWORD_HASH=... line into .env
 ```
 
 Edit `.env`:
 
-- `OPSHUB_USER` — admin login name
-- `OPSHUB_ALLOWED_ORIGINS=https://ops.example.com` — your public URL
-- `OPSHUB_COOKIE_DOMAIN=` — leave empty unless you need sub-domain sharing
-- `OPSHUB_DEV=0` — production mode
+- `IVYEA_OPS_USER` — admin login name
+- `IVYEA_OPS_ALLOWED_ORIGINS=https://ops.example.com` — your public URL
+- `IVYEA_OPS_COOKIE_DOMAIN=` — leave empty unless you need sub-domain sharing
+- `IVYEA_OPS_DEV=0` — production mode
 
 ## 2. Frontend
 
@@ -60,7 +60,7 @@ This produces `client/dist/`, served by FastAPI.
 cd ..
 cp deploy/install.conf.example deploy/install.conf
 $EDITOR deploy/install.conf
-# At minimum, set SERVER_NAME=ops.example.com and INSTALL_DIR=/opt/ops-hub
+# At minimum, set SERVER_NAME=ops.example.com and INSTALL_DIR=/opt/IvyeaOps
 
 bash scripts/render-deploy.sh
 # → Renders nginx, systemd, cron.d templates into deploy/dist/
@@ -82,17 +82,17 @@ sudo certbot certonly --nginx -d ops.example.com
 
 ```bash
 # nginx
-sudo cp deploy/dist/nginx/ops-hub.conf /etc/nginx/conf.d/
+sudo cp deploy/dist/nginx/ivyea-ops.conf /etc/nginx/conf.d/
 sudo nginx -t && sudo systemctl reload nginx
 
 # systemd
-sudo cp deploy/dist/systemd/ops-hub.service /etc/systemd/system/
+sudo cp deploy/dist/systemd/ivyea-ops.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now ops-hub.service
+sudo systemctl enable --now ivyea-ops.service
 
 # CPU alert cron (optional but recommended)
-sudo mkdir -p /var/log/ops-hub
-sudo cp deploy/dist/cron.d/ops-hub-cpu-alert /etc/cron.d/
+sudo mkdir -p /var/log/IvyeaOps
+sudo cp deploy/dist/cron.d/ivyea-ops-cpu-alert /etc/cron.d/
 ```
 
 ## 6. Smoke test
@@ -112,32 +112,32 @@ should be green or show a clear "未配置" reason.
 ## Updating
 
 ```bash
-cd /opt/ops-hub
+cd /opt/IvyeaOps
 git pull
 cd server && pip3 install -r requirements.txt && cd ..
 cd client && npm install && npm run build && cd ..
-sudo systemctl restart ops-hub.service
+sudo systemctl restart ivyea-ops.service
 ```
 
 If `deploy/*.template` changed upstream:
 
 ```bash
 bash scripts/render-deploy.sh
-sudo cp deploy/dist/nginx/ops-hub.conf /etc/nginx/conf.d/
+sudo cp deploy/dist/nginx/ivyea-ops.conf /etc/nginx/conf.d/
 sudo nginx -t && sudo systemctl reload nginx
-sudo cp deploy/dist/systemd/ops-hub.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl restart ops-hub
+sudo cp deploy/dist/systemd/ivyea-ops.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl restart ivyea-ops
 ```
 
 ## Troubleshooting
 
-- **Login 403 / "origin not allowed"** — `OPSHUB_ALLOWED_ORIGINS` in
+- **Login 403 / "origin not allowed"** — `IVYEA_OPS_ALLOWED_ORIGINS` in
   `.env` doesn't include the URL the browser used. Add it,
-  `systemctl restart ops-hub`.
-- **502 from nginx** — `systemctl status ops-hub` and `journalctl -u
-  ops-hub -n 50`. Most often a missing Python dep or wrong PYTHONPATH.
+  `systemctl restart ivyea-ops`.
+- **502 from nginx** — `systemctl status ivyea-ops` and `journalctl -u
+  IvyeaOps -n 50`. Most often a missing Python dep or wrong PYTHONPATH.
 - **Cookie not sticking** — if you're behind a different subdomain than
-  configured, set `OPSHUB_COOKIE_DOMAIN` to a common ancestor (`.example.com`).
+  configured, set `IVYEA_OPS_COOKIE_DOMAIN` to a common ancestor (`.example.com`).
 - **systemd `Restart=on-failure` looping** — usually a syntax error in
   `.env` (unquoted spaces in a value). `set -a; . .env; set +a` in a shell
   to reproduce the parse.

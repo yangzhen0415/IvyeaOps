@@ -5,8 +5,8 @@ import AlertStrip from "./home/AlertStrip";
 import CategoryWatch from "./home/CategoryWatch";
 import MarketTraffic from "./home/MarketTraffic";
 
-const STORAGE_MKT = "opshub-pulse-marketplace";
-const STORAGE_TAB = "opshub-home-tab";
+const STORAGE_MKT = "ivyea-ops-pulse-marketplace";
+const STORAGE_TAB = "ivyea-ops-home-tab";
 
 const FLAG_URL = (code: string) => `https://flagcdn.com/w20/${code === "UK" ? "gb" : code.toLowerCase()}.png`;
 const MARKETPLACES = [

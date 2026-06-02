@@ -25,13 +25,13 @@ from app.services import agent_session_service as svc
 
 # Auto-compact when uncompressed token estimate exceeds this. Tunable per
 # deployment via env. ~32k matches Claude/GPT context windows comfortably.
-AUTO_COMPACT_THRESHOLD = int(os.environ.get("OPSHUB_AUTOCOMPACT_TOKENS", "32000"))
+AUTO_COMPACT_THRESHOLD = int(os.environ.get("IVYEA_OPS_AUTOCOMPACT_TOKENS", "32000"))
 
 # Model used for the summarization step. Route explicitly to GPT so we no
 # longer depend on the retired localhost:8000 gateway.
-SUMMARY_MODEL = os.environ.get("OPSHUB_SUMMARY_MODEL", "gpt-5.4")
-SUMMARY_PROVIDER = os.environ.get("OPSHUB_SUMMARY_PROVIDER", "openai-codex")
-SUMMARY_MAX_TOKENS = int(os.environ.get("OPSHUB_SUMMARY_MAX_TOKENS", "1200"))
+SUMMARY_MODEL = os.environ.get("IVYEA_OPS_SUMMARY_MODEL", "gpt-5.4")
+SUMMARY_PROVIDER = os.environ.get("IVYEA_OPS_SUMMARY_PROVIDER", "openai-codex")
+SUMMARY_MAX_TOKENS = int(os.environ.get("IVYEA_OPS_SUMMARY_MAX_TOKENS", "1200"))
 
 
 SYSTEM_PROMPT = """You are a session compactor. Compress the agent conversation
@@ -142,7 +142,7 @@ def _call_summary_model(messages: list[dict[str, str]]) -> tuple[str, int]:
         prompt,
         "-Q",
         "--source",
-        "ops-hub-session-compactor",
+        "IvyeaOps-session-compactor",
         "--max-turns",
         "1",
         "--toolsets",

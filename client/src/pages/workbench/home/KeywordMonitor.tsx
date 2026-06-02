@@ -5,7 +5,7 @@ import {
   type KeywordItem, type KeywordData, type KeywordExtendItem,
 } from "../../../api/home";
 
-const STORAGE_KEY = "opshub-pulse-keywords-v1";
+const STORAGE_KEY = "ivyea-ops-pulse-keywords-v1";
 
 type CardState =
   | { kind: "idle" }

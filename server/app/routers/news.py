@@ -2,7 +2,7 @@
 
 Daily AI industry + Amazon seller news with LLM-generated Chinese summaries.
 Data is produced by the Hermes skill ``ai-amazon-daily-digest`` and stored as
-one JSON file per day under ``$OPSHUB_DATA_DIR/news/YYYY-MM-DD.json``.
+one JSON file per day under ``$IVYEA_OPS_DATA_DIR/news/YYYY-MM-DD.json``.
 
 Retention: only the 2 most recent days are kept. Anything older is purged by
 ``_cleanup_old()`` which runs on every ``/refresh`` call and on startup.

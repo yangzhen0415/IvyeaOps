@@ -934,8 +934,8 @@ function AdDeepAnalysisPanel({ data }: { data: AdAuditFull }) {
         title: `${typeObj.label} · ${data.file_name}`,
         workdir: undefined,
       });
-      sessionStorage.setItem(`opshub-pending-msg-${s.id}`, typeObj.promptFn(context, report));
-      sessionStorage.setItem("opshub-jump-session", JSON.stringify({ sessionId: s.id, workdir: null }));
+      sessionStorage.setItem(`ivyea-ops-pending-msg-${s.id}`, typeObj.promptFn(context, report));
+      sessionStorage.setItem("ivyea-ops-jump-session", JSON.stringify({ sessionId: s.id, workdir: null }));
       navigate("/agents");
     } catch (e: any) {
       alert(e?.message || "启动失败");

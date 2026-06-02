@@ -2,7 +2,7 @@
 
 The /api/monitor/token-usage endpoint reads token data live from each tool's
 own local store (Hermes state.db, Claude jsonl, etc). That data vanishes when
-the tool is uninstalled. This module snapshots it into ops-hub's own DB so the
+the tool is uninstalled. This module snapshots it into IvyeaOps's own DB so the
 history survives.
 
 Granularity: one row per (day, source, agent, model) — compact (a few rows per

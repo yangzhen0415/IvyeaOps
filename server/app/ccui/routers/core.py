@@ -22,5 +22,5 @@ async def system_update() -> dict:
     # Updates are managed by the ops deployment, not from inside cloudcli.
     return {
         "success": False,
-        "message": "Updates are managed by the ops-hub deployment; in-app update is disabled.",
+        "message": "Updates are managed by the IvyeaOps deployment; in-app update is disabled.",
     }

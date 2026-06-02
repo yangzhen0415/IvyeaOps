@@ -14,7 +14,7 @@ Key design choices:
   * stream_callback is wired → tokens flow out per-token.
   * Model/provider come from hermes's own config.yaml.
 
-Usage (called by ops-hub ai_synthesis_service):
+Usage (called by IvyeaOps ai_synthesis_service):
     echo "prompt" | python hermes_stream_wrapper.py
 
 Exit codes:

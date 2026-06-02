@@ -853,7 +853,7 @@ export default function HubSettings() {
           keys={["alert_webhook", "alert_app_id", "alert_app_secret", "alert_chat_id", "alert_threshold", "alert_sustain", "alert_cooldown"]}
           vals={vals} onSave={save}
         >
-          <Field label="Webhook 地址" hint={<>群机器人 → 添加自定义机器人，复制 URL。设关键词 "ops-hub" 或 "CPU"。</>}>
+          <Field label="Webhook 地址" hint={<>群机器人 → 添加自定义机器人，复制 URL。设关键词 "IvyeaOps" 或 "CPU"。</>}>
             <SecretInput value={vals.alert_webhook} onChange={v => set("alert_webhook", v)}
               placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
             <TestButton settingKey="alert_webhook" value={vals.alert_webhook} label="发测试消息" />

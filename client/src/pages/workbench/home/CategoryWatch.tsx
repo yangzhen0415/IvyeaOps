@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchCategory, fetchCategoryCached, type CategoryResult } from "../../../api/home";
 
-const STORAGE_CAT = "opshub-home-category-q";
+const STORAGE_CAT = "ivyea-ops-home-category-q";
 
 function fmtVol(v: number | null | undefined): string {
   if (v == null) return "—";

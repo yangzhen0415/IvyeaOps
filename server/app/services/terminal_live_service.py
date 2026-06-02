@@ -1,4 +1,4 @@
-"""Persistent server-terminal sessions + history for ops-hub.
+"""Persistent server-terminal sessions + history for IvyeaOps.
 
 Separate from the old tmux snapshot table in routers/terminal.py.
 This DB stores one row per terminal session plus an append-only history log
@@ -19,7 +19,7 @@ from app.core.config import settings
 
 DB_PATH = Path(
     os.environ.get(
-        "OPSHUB_TERMINAL_LIVE_DB",
+        "IVYEA_OPS_TERMINAL_LIVE_DB",
         str(settings.data_dir / "terminal_live.sqlite3"),
     )
 )

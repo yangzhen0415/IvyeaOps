@@ -1,4 +1,4 @@
-"""Live PTY manager for ops-hub server-terminal sessions.
+"""Live PTY manager for IvyeaOps server-terminal sessions.
 
 One terminal session ↔ one shell PTY. Sessions stay alive when the browser
 reloads; WebSocket subscribers can detach/reattach. Output is persisted via
@@ -24,12 +24,12 @@ import pyte
 
 from app.services import terminal_live_service as svc
 
-MAX_LIVE_TERMINALS = int(os.environ.get("OPSHUB_MAX_TERMINALS", "8"))
-IDLE_RECYCLE_SECS = int(os.environ.get("OPSHUB_TERMINAL_IDLE_SECS", str(12 * 60 * 60)))
-RING_BYTES = int(os.environ.get("OPSHUB_TERMINAL_RING_BYTES", str(512 * 1024)))
-PERSIST_FLUSH_MS = int(os.environ.get("OPSHUB_TERMINAL_FLUSH_MS", "250"))
+MAX_LIVE_TERMINALS = int(os.environ.get("IVYEA_OPS_MAX_TERMINALS", "8"))
+IDLE_RECYCLE_SECS = int(os.environ.get("IVYEA_OPS_TERMINAL_IDLE_SECS", str(12 * 60 * 60)))
+RING_BYTES = int(os.environ.get("IVYEA_OPS_TERMINAL_RING_BYTES", str(512 * 1024)))
+PERSIST_FLUSH_MS = int(os.environ.get("IVYEA_OPS_TERMINAL_FLUSH_MS", "250"))
 READ_CHUNK = 8192
-RUNAWAY_ITERS = int(os.environ.get("OPSHUB_TERMINAL_RUNAWAY_ITERS", "256"))
+RUNAWAY_ITERS = int(os.environ.get("IVYEA_OPS_TERMINAL_RUNAWAY_ITERS", "256"))
 PYTE_COLS = 220
 PYTE_ROWS = 50
 
@@ -39,7 +39,7 @@ PYTE_ROWS = 50
 # currently-visible 50-line pyte window. The service layer keeps at most
 # three rows per session (curr / prev / before), so the count stays
 # bounded no matter how long the session runs.
-SNAPSHOT_INTERVAL_S = int(os.environ.get("OPSHUB_TERMINAL_SNAPSHOT_INTERVAL", "300"))
+SNAPSHOT_INTERVAL_S = int(os.environ.get("IVYEA_OPS_TERMINAL_SNAPSHOT_INTERVAL", "300"))
 # Skip writing if normalized content is shorter than this (prompt-only /
 # blank). Manual capture bypasses.
 SNAPSHOT_MIN_CHARS = 200

@@ -466,8 +466,8 @@ function AsinDeepAnalysisPanel({ data }: { data: AuditFull }) {
         workdir: undefined,
       });
       const prompt = typeObj.promptFn(data.asin, data.marketplace, truncateReport(data.raw_md || "（无报告）"));
-      sessionStorage.setItem(`opshub-pending-msg-${s.id}`, prompt);
-      sessionStorage.setItem("opshub-jump-session", JSON.stringify({ sessionId: s.id, workdir: null }));
+      sessionStorage.setItem(`ivyea-ops-pending-msg-${s.id}`, prompt);
+      sessionStorage.setItem("ivyea-ops-jump-session", JSON.stringify({ sessionId: s.id, workdir: null }));
       navigate("/agents");
     } catch (e: any) {
       alert(e?.message || "启动失败");

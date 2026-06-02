@@ -50,7 +50,7 @@ export default function ChatPane({ session, showCli = false, showInherited = fal
     setPartial("");
     refresh();
     // Pre-fill input if a pending context message was stored by another page
-    const pendingKey = `opshub-pending-msg-${session.id}`;
+    const pendingKey = `ivyea-ops-pending-msg-${session.id}`;
     const pending = sessionStorage.getItem(pendingKey);
     if (pending) {
       sessionStorage.removeItem(pendingKey);

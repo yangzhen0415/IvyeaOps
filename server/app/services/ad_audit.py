@@ -18,7 +18,7 @@ Design
 ------
 - Single global lock **shared with ASIN audit** so only one heavy agent
   runs at a time (single-seat operator).
-- Each job dir: ``~/.hermes/ops-hub-data/ad-audits/<job_id>/``
+- Each job dir: ``~/.hermes/ivyea-ops-data/ad-audits/<job_id>/``
   - ``meta.json``       (full state + user context)
   - ``preview.json``    (detected ad_type / date range / columns)
   - ``raw.<ext>``       (uploaded report, kept for reproducibility)
@@ -55,7 +55,7 @@ from app.services.runners import (
     runner_status,
 )
 
-AD_AUDIT_ROOT = Path.home() / ".hermes" / "ops-hub-data" / "ad-audits"
+AD_AUDIT_ROOT = Path.home() / ".hermes" / "ivyea-ops-data" / "ad-audits"
 AD_AUDIT_ROOT.mkdir(parents=True, exist_ok=True)
 
 logger = logging.getLogger(__name__)

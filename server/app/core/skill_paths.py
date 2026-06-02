@@ -28,11 +28,11 @@ _HERMES_HOME = Path(
 ).resolve()
 
 SKILLS_ROOT: Path = Path(
-    os.getenv("OPSHUB_SKILLS_ROOT", str(_HERMES_HOME / "skills"))
+    os.getenv("IVYEA_OPS_SKILLS_ROOT", str(_HERMES_HOME / "skills"))
 ).resolve()
 
 STUDIO_ROOT: Path = Path(
-    os.getenv("OPSHUB_STUDIO_ROOT", str(_HERMES_HOME / "skill-studio"))
+    os.getenv("IVYEA_OPS_STUDIO_ROOT", str(_HERMES_HOME / "skill-studio"))
 ).resolve()
 
 

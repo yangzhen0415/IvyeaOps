@@ -4,7 +4,7 @@ We support a small fixed set out of the box (hermes, codex, claude-code,
 kiro-cli). Adding a new agent is two steps:
 
   1. Drop a new entry into AGENT_DEFS below.
-  2. Restart ops-hub. discover_agents() will probe and persist.
+  2. Restart IvyeaOps. discover_agents() will probe and persist.
 
 Each AgentDef captures everything pty_manager and the chat/SSE router need
 to know to launch and converse with the binary:
@@ -36,8 +36,8 @@ from app.services import agent_session_service as svc
 # Optional legacy gateway config. Leave unset by default: the old local
 # kiro gateway on :8000 has been retired.
 # ---------------------------------------------------------------------------
-KIRO_GATEWAY_URL = os.environ.get("OPSHUB_KIRO_GATEWAY", "").strip()
-KIRO_GATEWAY_KEY = os.environ.get("OPSHUB_KIRO_GATEWAY_KEY", "hermes2024")
+KIRO_GATEWAY_URL = os.environ.get("IVYEA_OPS_KIRO_GATEWAY", "").strip()
+KIRO_GATEWAY_KEY = os.environ.get("IVYEA_OPS_KIRO_GATEWAY_KEY", "hermes2024")
 
 
 def _list_kiro_models() -> list[str]:

@@ -116,11 +116,11 @@ async def settings_health(_u: str = Depends(require_user)):
     imgflow_url = (cfg.get("imgflow_url") or "http://127.0.0.1:3001").rstrip("/")
     gbrain_bin = cfg.get("gbrain_bin") or ""
     if not gbrain_bin:
-        gbrain_bin = __import__("os").environ.get("OPSHUB_GBRAIN_BIN", "/usr/local/bin/gbrain")
+        gbrain_bin = __import__("os").environ.get("IVYEA_OPS_GBRAIN_BIN", "/usr/local/bin/gbrain")
 
     brain_root = cfg.get("brain_root") or ""
     if not brain_root:
-        brain_root = __import__("os").environ.get("OPSHUB_BRAIN_ROOT") or str(Path.home() / "brain")
+        brain_root = __import__("os").environ.get("IVYEA_OPS_BRAIN_ROOT") or str(Path.home() / "brain")
 
     imgflow_result, = await asyncio.gather(_check_http(imgflow_url + "/"))
 

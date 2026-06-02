@@ -80,7 +80,7 @@ export default function SkillTools() {
     try {
       if (tool.pinned) { try { await pinTool(tool.name, false); } catch { /**/ } }
       await deleteSkill(tool.name);
-      window.dispatchEvent(new CustomEvent("opshub:pinned-changed"));
+      window.dispatchEvent(new CustomEvent("ivyea-ops:pinned-changed"));
       if (activeTool?.name === tool.name) setActiveTool(null);
       await loadTools();
     } catch { /**/ }
@@ -422,7 +422,7 @@ function ToolPanel({ tool }: { tool: SkillToolMeta }) {
       const next = !pinned;
       await pinTool(tool.name, next);
       setPinned(next);
-      window.dispatchEvent(new CustomEvent("opshub:pinned-changed"));
+      window.dispatchEvent(new CustomEvent("ivyea-ops:pinned-changed"));
     } catch { /**/ } finally { setPinning(false); }
   }, [pinned, tool.name]);
 

@@ -20,8 +20,8 @@ _HDR = {"Origin": _ORIGIN}
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("OPSHUB_SECRET", "test-secret")
-    monkeypatch.setenv("OPSHUB_ALLOWED_ORIGINS", _ORIGIN)
+    monkeypatch.setenv("IVYEA_OPS_SECRET", "test-secret")
+    monkeypatch.setenv("IVYEA_OPS_ALLOWED_ORIGINS", _ORIGIN)
     monkeypatch.setenv("CCUI_DB_PATH", str(tmp_path / "ccui.db"))
     # Isolate HOME so the projects-list synchronizer scans an empty ~/.claude.
     (tmp_path / "home").mkdir()

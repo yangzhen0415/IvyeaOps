@@ -1,4 +1,4 @@
-"""Sync ops-hub settings into Hermes config files.
+"""Sync IvyeaOps settings into Hermes config files.
 
 Called whenever hub_settings are saved. Idempotent — safe to call repeatedly.
 
@@ -17,7 +17,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
-import yaml  # PyYAML — available in the ops-hub venv
+import yaml  # PyYAML — available in the IvyeaOps venv
 
 
 _HERMES_CFG  = Path.home() / ".hermes" / "config.yaml"
@@ -117,7 +117,7 @@ def sync_sellersprite(key: str) -> None:
 
 
 def _python_bin() -> str:
-    return os.environ.get("OPSHUB_PYTHON", "python3")
+    return os.environ.get("IVYEA_OPS_PYTHON", "python3")
 
 
 def _read_env_file() -> Dict[str, str]:

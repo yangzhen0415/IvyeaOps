@@ -18,7 +18,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Surface the stack in the dev console; production bundles strip this
     // anyway. No remote reporting yet — add when we wire in Sentry/similar.
-    console.error("[ops-hub] render error:", error, info.componentStack);
+    console.error("[IvyeaOps] render error:", error, info.componentStack);
   }
 
   reset = () => this.setState({ error: null });

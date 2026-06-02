@@ -1,4 +1,4 @@
-# ops-hub
+# IvyeaOps
 
 A self-hosted operations workbench for Amazon sellers — AI agents, market
 research, ad auditing, Listing generation, knowledge base, and multi-terminal
@@ -30,8 +30,8 @@ workspace, all behind a single login.
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/ops-hub.git
-cd ops-hub
+git clone https://github.com/YOUR_USERNAME/IvyeaOps.git
+cd IvyeaOps
 
 # 2. One-command install (checks deps, builds frontend, generates .env)
 bash scripts/install.sh
@@ -48,8 +48,8 @@ agent detection and API key setup.
 
 ```powershell
 # 1. Clone (Git for Windows or GitHub Desktop)
-git clone https://github.com/YOUR_USERNAME/ops-hub.git
-cd ops-hub
+git clone https://github.com/YOUR_USERNAME/IvyeaOps.git
+cd IvyeaOps
 
 # 2. One-command install
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
@@ -76,15 +76,15 @@ Open **http://127.0.0.1:8001**.
 
 ## Configuration
 
-ops-hub uses a two-layer config model:
+IvyeaOps uses a two-layer config model:
 
 **Layer 1 — startup (`server/.env`):** read once at boot.
-Required: `OPSHUB_SECRET`, `OPSHUB_PASSWORD_HASH`, `OPSHUB_ALLOWED_ORIGINS`.
+Required: `IVYEA_OPS_SECRET`, `IVYEA_OPS_PASSWORD_HASH`, `IVYEA_OPS_ALLOWED_ORIGINS`.
 Generated automatically by `install.sh` / `install.ps1`.
 
 **Layer 2 — runtime (`data/hub_settings.json`):** edited in the web UI under
 **System Settings**. API keys, integration paths, alert thresholds. Empty
-values fall back to the matching `OPSHUB_*` env var, then to built-in defaults.
+values fall back to the matching `IVYEA_OPS_*` env var, then to built-in defaults.
 
 See [`docs/CONFIG.md`](docs/CONFIG.md) for the full reference.
 
@@ -92,7 +92,7 @@ See [`docs/CONFIG.md`](docs/CONFIG.md) for the full reference.
 
 ## First-Run Wizard
 
-On the first login (before any password has been set), ops-hub shows a
+On the first login (before any password has been set), IvyeaOps shows a
 guided setup wizard:
 
 1. **Welcome** — overview of features
@@ -107,14 +107,14 @@ You can skip any step and configure later in **System Settings**.
 
 ## AI Agents
 
-ops-hub supports three local Agent CLIs. Install at least one:
+IvyeaOps supports three local Agent CLIs. Install at least one:
 
 | Agent | Install | Notes |
 |---|---|---|
 | **hermes** | See hermes project docs | Recommended — includes MCP, Feishu relay |
 | **codex** | `npm install -g @openai/codex` | OpenAI Codex CLI |
 
-Once installed, ops-hub auto-detects them from `$PATH` — no manual path config
+Once installed, IvyeaOps auto-detects them from `$PATH` — no manual path config
 needed in most cases.
 
 ---
@@ -137,7 +137,7 @@ Full guide: [`docs/INSTALL.md`](docs/INSTALL.md)
 ## Project Layout
 
 ```
-ops-hub/
+IvyeaOps/
 ├── server/          FastAPI backend (Python)
 │   ├── app/
 │   │   ├── core/    config, settings, security, integrations
@@ -169,7 +169,7 @@ ops-hub/
 ```bash
 git pull
 bash scripts/install.sh   # re-installs deps and rebuilds frontend
-# (on Linux with systemd) sudo systemctl restart ops-hub
+# (on Linux with systemd) sudo systemctl restart ivyea-ops
 ```
 
 ---

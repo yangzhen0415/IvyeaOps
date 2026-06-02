@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { submitImage, imageStatus } from "../../api/assistant";
 
 const SIZES = ["1024x1024", "1024x1536", "1536x1024"];
-const SESSIONS_KEY = "opshub-imagegen-sessions";
+const SESSIONS_KEY = "ivyea-ops-imagegen-sessions";
 const MAX_SESSIONS = 20;
 
 interface ImageTurn {

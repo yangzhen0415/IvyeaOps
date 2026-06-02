@@ -27,16 +27,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-# repo root: server/app/services/autofix_service.py -> parents[3] == ops-hub/
+# repo root: server/app/services/autofix_service.py -> parents[3] == IvyeaOps/
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SERVICE_UNIT = "ops-hub.service"
+SERVICE_UNIT = "ivyea-ops.service"
 
 # Caps. Diagnosis is the only long-running step; keep a hard ceiling so a stuck
 # hermes can never pin memory/CPU indefinitely.
 _DIAGNOSE_TIMEOUT_S = 900
 _DIFF_MAX_CHARS = 60_000
 _LOG_TAIL_CHARS = 8_000
-_WORKTREE_PARENT = Path("/tmp/opshub-autofix")
+_WORKTREE_PARENT = Path("/tmp/ivyea-ops-autofix")
 
 
 @dataclass
@@ -105,7 +105,7 @@ def _build_prompt(err: Dict[str, Any]) -> str:
     status = err.get("status") or ""
     detail = err.get("detail") or ""
     feature = err.get("feature") or ""
-    return f"""你是 ops-hub 项目（FastAPI 后端 server/ + React 前端 client/）的维护工程师。
+    return f"""你是 IvyeaOps 项目（FastAPI 后端 server/ + React 前端 client/）的维护工程师。
 当前工作目录就是该项目的一个隔离副本，可以直接读写文件。
 
 用户在使用功能时遇到报错，需要你定位根因并修复：
