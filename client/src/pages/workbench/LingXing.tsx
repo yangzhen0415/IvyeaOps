@@ -25,13 +25,16 @@ type Param = { name: string; type?: string; required?: boolean; default?: any; l
 type Dataset = { key: string; label: string; group: string; params: Param[]; columns: Col[]; hint?: string };
 type Status = { master_enabled: boolean; operate_active: boolean; openapi_configured: boolean };
 
+const LS_KEY = "lingxing.ui.v1";
+function readLS(): any { try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; } }
+
 export default function LingXing() {
   const [status, setStatus] = useState<Status | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [view, setView] = useState<"browse" | "auto" | "operate" | "audit">("browse");
-  const [active, setActive] = useState<string>("sellers");
+  const [view, setView] = useState<"browse" | "auto" | "operate" | "audit">(() => readLS().view || "browse");
+  const [active, setActive] = useState<string>(() => readLS().active || "sellers");
   const [sellers, setSellers] = useState<any[]>([]);
-  const [storeSid, setStoreSid] = useState<string>("");
+  const [storeSid, setStoreSid] = useState<string>(() => readLS().storeSid || "");
   const [form, setForm] = useState<Record<string, any>>({});
   const [rows, setRows] = useState<any[]>([]);
   const [meta, setMeta] = useState<{ count?: number; synced_at?: string; cached?: boolean } | null>(null);
@@ -39,6 +42,11 @@ export default function LingXing() {
   const [err, setErr] = useState<string>("");
 
   const ds = useMemo(() => datasets.find((d) => d.key === active), [datasets, active]);
+
+  /* remember last view / dataset / store across visits */
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ view, active, storeSid })); } catch { /* */ }
+  }, [view, active, storeSid]);
 
   /* initial load */
   useEffect(() => { void boot(); }, []);
@@ -56,7 +64,10 @@ export default function LingXing() {
       const r = await api.post("/lingxing/read/sellers", { params: {} });
       const list = r.data.rows || [];
       setSellers(list);
-      if (list.length && !storeSid) setStoreSid(String(list[0].sid));
+      // keep the remembered store if it still exists, else fall back to first
+      if (list.length && (!storeSid || !list.some((s: any) => String(s.sid) === storeSid))) {
+        setStoreSid(String(list[0].sid));
+      }
     } catch { /* master may be off */ }
   }
 
@@ -77,13 +88,18 @@ export default function LingXing() {
       else f[p.name] = p.default ?? "";
     }
     setForm(f); setRows([]); setMeta(null); setErr("");
+    // auto-load last selection so the user doesn't have to re-query each visit
+    if (view === "browse") {
+      const ready = ds.params.filter((p) => p.required).every((p) => f[p.name] !== "" && f[p.name] != null);
+      if (ready) void run(false, f);
+    }
   }, [active, ds, storeSid]);
 
-  async function run(force = false) {
+  async function run(force = false, override?: Record<string, any>) {
     if (!ds) return;
     setLoading(true); setErr("");
     try {
-      const r = await api.post(`/lingxing/read/${ds.key}`, { params: form, force });
+      const r = await api.post(`/lingxing/read/${ds.key}`, { params: override || form, force });
       const data = r.data;
       setRows(Array.isArray(data.rows) ? data.rows : []);
       setMeta({ count: data.count, synced_at: data.synced_at, cached: data.cached });
