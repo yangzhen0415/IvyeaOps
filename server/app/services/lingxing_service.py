@@ -139,6 +139,23 @@ def init_db() -> None:
             )
             """
         )
+        # Weekly advisory automation runs (P2 — analyse + recommend only).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lingxing_auto_runs (
+                id          TEXT PRIMARY KEY,
+                started_at  TEXT,
+                finished_at TEXT,
+                status      TEXT,            -- collecting|analyzing|done|failed
+                trigger     TEXT,            -- scheduled|manual
+                scope_json  TEXT,
+                metrics_json TEXT,
+                proposals_json TEXT,
+                summary     TEXT,
+                error       TEXT
+            )
+            """
+        )
         conn.commit()
     finally:
         conn.close()

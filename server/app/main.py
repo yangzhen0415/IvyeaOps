@@ -237,10 +237,20 @@ async def lifespan(app: FastAPI):
 
     _archive_task = asyncio.create_task(_token_archive_loop(), name="token-archiver")
 
+    # 领星 weekly advisory automation scheduler (gated by lingxing_auto_enabled).
+    try:
+        from app.services.lingxing_automation import scheduler_loop as _lx_auto_loop
+        _lingxing_auto_task = asyncio.create_task(_lx_auto_loop(), name="lingxing-auto")
+    except Exception as e:
+        _lingxing_auto_task = None
+        print(f"[IvyeaOps] lingxing auto scheduler skipped: {e}")
+
     yield
     _watchdog_task.cancel()
     _market_task.cancel()
     _archive_task.cancel()
+    if _lingxing_auto_task:
+        _lingxing_auto_task.cancel()
     try:
         await _watchdog_task
     except (asyncio.CancelledError, Exception):

@@ -118,6 +118,13 @@ _DEFAULTS: Dict[str, Any] = {
     "lingxing_scope_asins": "",           # comma-separated ASINs allowed for writes ("*" = any in-store)
     "lingxing_max_ops_per_run": 10,       # max write ops a single automation run may propose
     "lingxing_max_change_pct": 20,        # max +/- % change a single op may make (bid/budget)
+    # Weekly advisory automation (P2 — analyse + recommend, never writes).
+    "lingxing_auto_enabled": False,       # master enable for the scheduled run (default off)
+    "lingxing_auto_weekday": 0,           # 0=Mon … 6=Sun
+    "lingxing_auto_hour": 9,              # local hour to fire
+    "lingxing_auto_report_days": 7,       # how many days of ad reports to aggregate
+    "lingxing_auto_stores": "",           # sids scope (csv); empty = all accessible stores
+    "lingxing_auto_max_campaigns": 40,    # cap campaigns sent to the model per run
     # --- External-integration paths ----------------------------------------
     # Optional: IvyeaOps works standalone without any of these, but the
     # monitor page and agent picker light up when you point at the right

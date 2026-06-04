@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import LingXingAutomation from "./LingXingAutomation";
 
 /* ── shared mini-styles (match workbench look) ─────────────────────────── */
 const inputStyle: React.CSSProperties = {
@@ -25,6 +26,7 @@ type Status = { master_enabled: boolean; operate_active: boolean; openapi_config
 export default function LingXing() {
   const [status, setStatus] = useState<Status | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [view, setView] = useState<"browse" | "auto">("browse");
   const [active, setActive] = useState<string>("sellers");
   const [sellers, setSellers] = useState<any[]>([]);
   const [storeSid, setStoreSid] = useState<string>("");
@@ -127,6 +129,17 @@ export default function LingXing() {
           <span style={{ fontSize: 11 }}>（写操作另有独立开关 + 三重复核，默认关闭）</span>
         </div>
       ) : (
+        <>
+        <div style={{ display: "flex", gap: 2, marginBottom: 10 }}>
+          {([["browse", "数据浏览"], ["auto", "自动化建议"]] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              padding: "6px 14px", fontSize: 11, border: "none", borderRadius: 4, cursor: "pointer",
+              background: view === v ? "var(--acc)" : "var(--bg2)", color: view === v ? "#000" : "var(--t2)",
+              fontWeight: view === v ? 600 : 400,
+            }}>{l}</button>
+          ))}
+        </div>
+        {view === "auto" ? <LingXingAutomation /> : (
         <div style={{ display: "flex", gap: 12 }}>
           {/* dataset list */}
           <div style={{ width: 180, flexShrink: 0 }}>
@@ -197,6 +210,8 @@ export default function LingXing() {
             </div>
           </div>
         </div>
+        )}
+        </>
       )}
     </div>
   );
