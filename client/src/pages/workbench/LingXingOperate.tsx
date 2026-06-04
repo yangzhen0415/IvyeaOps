@@ -23,6 +23,9 @@ export default function LingXingOperate() {
   const [runs, setRuns] = useState<any[]>([]);
   const [runId, setRunId] = useState("");
   const [sellers, setSellers] = useState<any[]>([]);
+  const [opTypes, setOpTypes] = useState<any[]>([]);
+  const [mForm, setMForm] = useState<any>({ op_type: "keyword_bid" });
+  const [showManual, setShowManual] = useState(false);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const curMap = useMemo(() => sidCurrencyMap(sellers), [sellers]);
@@ -31,12 +34,14 @@ export default function LingXingOperate() {
   useEffect(() => { void load(); const t = setInterval(refreshStatus, 5000); return () => clearInterval(t); }, []);
   async function load() {
     try {
-      const [s, t, r, sl] = await Promise.all([
+      const [s, t, r, sl, ot] = await Promise.all([
         api.get("/lingxing/status"), api.get("/lingxing/operate/tickets"), api.get("/lingxing/auto/runs"),
         api.post("/lingxing/read/sellers", { params: {} }).catch(() => ({ data: { rows: [] } })),
+        api.get("/lingxing/operate/op-types").catch(() => ({ data: { op_types: [] } })),
       ]);
       setStatus(s.data); setTickets(t.data.tickets || []); setRuns(r.data.runs || []);
-      setSellers(sl.data.rows || []);
+      setSellers(sl.data.rows || []); setOpTypes(ot.data.op_types || []);
+      if (!mForm.sid && sl.data.rows?.[0]) setMForm((f: any) => ({ ...f, sid: sl.data.rows[0].sid }));
       if (!runId && r.data.runs?.[0]) setRunId(r.data.runs[0].id);
     } catch (e: any) { setMsg(humanErr(e)); }
   }
@@ -54,6 +59,15 @@ export default function LingXingOperate() {
     try { const r = await api.post(`/lingxing/operate/from-run/${runId}`); setMsg(`已生成 ${r.data.created} 个工单`); await refreshTickets(); }
     catch (e: any) { setMsg(humanErr(e)); } finally { setBusy(false); }
   }
+  async function submitManual() {
+    setBusy(true); setMsg("");
+    try {
+      const r = await api.post("/lingxing/operate/manual", mForm);
+      setMsg(`已创建工单 ${r.data.id}（${r.data.status}）`);
+      setShowManual(false); await refreshTickets(); setSel(r.data);
+    } catch (e: any) { setMsg(humanErr(e)); } finally { setBusy(false); }
+  }
+  const mSet = (k: string, v: any) => setMForm((f: any) => ({ ...f, [k]: v }));
   async function openTicket(id: string) { try { setSel((await api.get(`/lingxing/operate/tickets/${id}`)).data); } catch (e: any) { setMsg(humanErr(e)); } }
   async function act(id: string, action: string, body: any = {}) {
     setBusy(true); setMsg("");
@@ -103,8 +117,43 @@ export default function LingXingOperate() {
           {runs.map((r) => <option key={r.id} value={r.id}>{fmtTs(r.started_at)} · {r.summary?.slice(0, 20) || r.status}</option>)}
         </select>
         <Btn onClick={genFromRun} disabled={busy || !runId}>生成工单（进入复核）</Btn>
+        <span style={{ marginLeft: "auto" }}><Btn onClick={() => setShowManual((v) => !v)}>{showManual ? "收起" : "＋ 新建工单"}</Btn></span>
         {msg && <span style={{ fontSize: 11, color: "var(--t3)" }}>{msg}</span>}
       </div>
+
+      {/* manual ticket — any supported op (bid / budget / state) */}
+      {showManual && (() => {
+        const op = opTypes.find((o) => o.key === mForm.op_type);
+        const nl = op?.num_label || "数值";
+        return (
+          <div className="card" style={{ padding: 12, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8 }}>新建写操作工单（将走 三复核 + 护栏 + 人工确认）</div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <L t="操作类型"><select value={mForm.op_type} onChange={(e) => mSet("op_type", e.target.value)} style={{ ...inputStyle, minWidth: 150 }}>
+                {opTypes.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select></L>
+              <L t="店铺"><select value={mForm.sid ?? ""} onChange={(e) => mSet("sid", Number(e.target.value))} style={{ ...inputStyle, minWidth: 140 }}>
+                {sellers.map((s) => <option key={s.sid} value={s.sid}>{s.name || s.sid}</option>)}
+              </select></L>
+              <L t={`目标ID（${op?.key === "campaign_budget" ? "活动" : op?.key === "keyword_bid" ? "关键词" : op?.key === "target_bid" ? "定向" : "广告组"}）`}>
+                <input value={mForm.target_id ?? ""} onChange={(e) => mSet("target_id", e.target.value)} style={{ ...inputStyle, width: 150 }} /></L>
+              <L t="目标名(可选)"><input value={mForm.target_name ?? ""} onChange={(e) => mSet("target_name", e.target.value)} style={{ ...inputStyle, width: 120 }} /></L>
+              <L t={`当前${nl}`}><input value={mForm.cur_value ?? ""} onChange={(e) => mSet("cur_value", e.target.value)} style={{ ...inputStyle, width: 90 }} /></L>
+              <L t={`目标${nl}`}><input value={mForm.new_value ?? ""} onChange={(e) => mSet("new_value", e.target.value)} style={{ ...inputStyle, width: 90 }} /></L>
+              <L t="状态"><select value={mForm.new_state ?? ""} onChange={(e) => mSet("new_state", e.target.value)} style={{ ...inputStyle, width: 100 }}>
+                <option value="">不改</option><option value="enabled">enabled</option><option value="paused">paused</option>
+              </select></L>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "flex-end" }}>
+              <L t="依据/理由"><input value={mForm.rationale ?? ""} onChange={(e) => mSet("rationale", e.target.value)} style={{ ...inputStyle, width: 420 }} placeholder="为什么这么改（复核会读）" /></L>
+              <Btn primary onClick={submitManual} disabled={busy || !mForm.target_id || !mForm.sid}>提交进复核</Btn>
+            </div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 6 }}>
+              提示：改竞价/预算需填「当前值」才能算幅度护栏；竞价用关键词/定向ID，预算用活动ID。回滚以当前值为快照。
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ display: "flex", gap: 12 }}>
         {/* tickets list */}
@@ -117,7 +166,7 @@ export default function LingXingOperate() {
               background: sel?.id === t.id ? "var(--bg2)" : "transparent",
             }}>
               <div style={{ fontSize: 11, display: "flex", justifyContent: "space-between", gap: 6 }}>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.intent?.campaign_name || t.intent?.campaign_id}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.intent?.target_name || t.intent?.campaign_name || t.intent?.target_id || t.intent?.campaign_id}</span>
                 <TicketStatus s={t.status} />
               </div>
               <div style={{ fontSize: 10, color: "var(--t3)" }}>{fmtChange(t.intent?.change, curOf(t.intent?.sid))}</div>
@@ -130,7 +179,8 @@ export default function LingXingOperate() {
           {!sel ? <div style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>选择左侧工单</div> : (
             <div style={{ padding: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <b style={{ fontSize: 12 }}>{sel.intent?.campaign_name || sel.intent?.campaign_id}</b>
+                <b style={{ fontSize: 12 }}>{sel.intent?.target_name || sel.intent?.campaign_name || sel.intent?.target_id || sel.intent?.campaign_id}</b>
+                {sel.intent?.op_label && <span style={{ fontSize: 10, color: "var(--t3)", border: "1px solid var(--b)", borderRadius: 3, padding: "1px 5px" }}>{sel.intent.op_label}</span>}
                 <TicketStatus s={sel.status} />
                 <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺 {sel.intent?.sid}</span>
               </div>
@@ -202,14 +252,23 @@ function TicketStatus({ s }: { s: string }) {
   };
   return <span style={{ fontSize: 10, color: map[s] || "var(--t3)" }}>{zh[s] || s}</span>;
 }
+function numField(o: any): [string, any] {
+  if (o?.daily_budget != null) return ["预算", o.daily_budget];
+  if (o?.bid != null) return ["竞价", o.bid];
+  if (o?.defaultBid != null) return ["默认竞价", o.defaultBid];
+  return ["", null];
+}
 function fmtChange(c: any, cur?: Cur) {
   if (!c) return "—";
-  const a = [];
-  if (c.daily_budget != null) a.push(`预算→${fmtBudget(c.daily_budget, cur)}`);
+  const a = []; const [lbl, v] = numField(c);
+  if (v != null) a.push(`${lbl}→${fmtBudget(v, cur)}`);
   if (c.state) a.push(`状态→${c.state}`);
   return a.join(" / ") || "—";
 }
-function fmtState(o: any, cur?: Cur) { if (!o) return "—"; const a = []; if (o.state) a.push(o.state); if (o.daily_budget != null) a.push(fmtBudget(o.daily_budget, cur)); return a.join(" / ") || "—"; }
+function fmtState(o: any, cur?: Cur) { if (!o) return "—"; const a = []; if (o.state) a.push(o.state); const [, v] = numField(o); if (v != null) a.push(fmtBudget(v, cur)); return a.join(" / ") || "—"; }
+function L({ t, children }: { t: string; children: any }) {
+  return <label style={{ display: "grid", gap: 3, fontSize: 10, color: "var(--t3)" }}><span>{t}</span>{children}</label>;
+}
 function fmtDur(s: number) { const m = Math.floor(s / 60); return m >= 60 ? `${Math.floor(m / 60)}h${m % 60}m` : `${m}m`; }
 function fmtTs(ts?: string) { if (!ts) return "—"; try { return new Date(ts).toLocaleString("zh-CN", { hour12: false }); } catch { return ts; } }
 function humanErr(e: any): string { return e?.response?.data?.detail || e?.message || "请求失败"; }

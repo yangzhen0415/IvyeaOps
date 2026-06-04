@@ -35,6 +35,38 @@ from app.services import lingxing_service as _gw
 PUT_SP_CAMPAIGN_ROUTE = "/basicOpen/adReport/manage/putSpCampaign"
 _RISK_THRESHOLD = 0.5
 
+# Supported write operations. All SP `put*` endpoints share one shape:
+# {sid, <array>:[{<id_field>, isBaseValue:0, state?, <num_field>/budget}]}. Each
+# op carries its numeric field (for magnitude guardrail + snapshot/rollback) and,
+# where a read exists, the dataset to snapshot the live value before executing.
+OP_TYPES: Dict[str, Dict[str, Any]] = {
+    "campaign_budget": {
+        "label": "广告活动·预算/启停", "route": PUT_SP_CAMPAIGN_ROUTE,
+        "array": "campaigns", "id_field": "campaignId", "num_field": "daily_budget",
+        "num_label": "日预算", "snapshot_dataset": "sp_campaigns", "snapshot_id": "campaign_id",
+    },
+    "keyword_bid": {
+        "label": "关键词·竞价/启停", "route": "/basicOpen/adReport/manage/putSpKeyword",
+        "array": "keywords", "id_field": "keywordId", "num_field": "bid",
+        "num_label": "竞价bid", "snapshot_dataset": None, "snapshot_id": None,
+    },
+    "target_bid": {
+        "label": "定向·竞价/启停", "route": "/basicOpen/adReport/manage/putSpTarget",
+        "array": "targetingClauses", "id_field": "targetId", "num_field": "bid",
+        "num_label": "竞价bid", "snapshot_dataset": None, "snapshot_id": None,
+    },
+    "adgroup_bid": {
+        "label": "广告组·默认竞价/启停", "route": "/basicOpen/adReport/manage/putSpAdGroup",
+        "array": "adGroups", "id_field": "adGroupId", "num_field": "defaultBid",
+        "num_label": "默认竞价", "snapshot_dataset": None, "snapshot_id": None,
+    },
+}
+
+
+def op_types_catalog() -> List[Dict[str, Any]]:
+    return [{"key": k, "label": v["label"], "num_field": v["num_field"],
+             "num_label": v["num_label"], "reversible": True} for k, v in OP_TYPES.items()]
+
 _REVIEWERS = [
     ("数据严谨派", "你是只看数据、最严谨的审核员。只有当数据充分支撑该调整、且改动幅度与依据匹配时才批准。"),
     ("魔鬼代言人", "你是风险厌恶的魔鬼代言人。先假设这个调整是有害的，竭力找出它可能造成的负面后果、被数据噪声误导的可能、以及最坏情况；只有在找不到重大风险时才勉强批准。"),
@@ -152,24 +184,29 @@ def check_guardrails(intent: Dict[str, Any]) -> Dict[str, Any]:
         "店铺在白名单" if (allowed and sid in allowed) else
         ("scope 为空，默认禁止所有写操作" if not allowed else f"店铺 {sid} 不在白名单"))
 
-    # magnitude
+    op = OP_TYPES.get(intent.get("op_type") or "")
+    nf = op["num_field"] if op else "daily_budget"
+    nlabel = op["num_label"] if op else "数值"
+    add("op_type_known", bool(op), op["label"] if op else f"未知操作类型 {intent.get('op_type')}")
+
+    # magnitude (on the op's numeric field: budget / bid / defaultBid)
     max_pct = float(cfg.get("lingxing_max_change_pct") or 20)
     change = intent.get("change") or {}
     before = intent.get("before") or {}
-    pct_ok, pct_detail = True, "无预算变更"
-    if change.get("daily_budget") is not None and before.get("daily_budget"):
+    pct_ok, pct_detail = True, f"无{nlabel}变更"
+    if change.get(nf) is not None and before.get(nf):
         try:
-            old, new = float(before["daily_budget"]), float(change["daily_budget"])
+            old, new = float(before[nf]), float(change[nf])
             pct = abs(new - old) / old * 100 if old else 999
             pct_ok = pct <= max_pct
-            pct_detail = f"幅度 {pct:.1f}% ≤ {max_pct}%" if pct_ok else f"幅度 {pct:.1f}% 超过上限 {max_pct}%"
+            pct_detail = f"{nlabel}幅度 {pct:.1f}% ≤ {max_pct}%" if pct_ok else f"{nlabel}幅度 {pct:.1f}% 超过上限 {max_pct}%"
         except (TypeError, ValueError, ZeroDivisionError):
             pct_ok, pct_detail = False, "无法计算幅度"
     add("change_magnitude", pct_ok, pct_detail)
 
-    # sane budget / state
-    nb = change.get("daily_budget")
-    add("budget_positive", nb is None or float(nb) > 0, "" if nb is None else f"新预算 {nb}")
+    # sane value / state
+    nv = change.get(nf)
+    add("value_positive", nv is None or float(nv) > 0, "" if nv is None else f"新{nlabel} {nv}")
     ns = change.get("state")
     add("state_valid", ns is None or ns in ("enabled", "paused"), "" if ns is None else f"state={ns}")
 
@@ -265,8 +302,9 @@ async def create_tickets_from_run(run_id: str) -> Dict[str, Any]:
         if not change:
             continue
         intent = {
-            "sid": p.get("sid"), "campaign_id": str(p.get("campaign_id")),
-            "campaign_name": p.get("campaign_name"), "op_type": "+".join(change.keys()),
+            "op_type": "campaign_budget", "op_label": OP_TYPES["campaign_budget"]["label"],
+            "sid": p.get("sid"), "target_id": str(p.get("campaign_id")),
+            "target_name": p.get("campaign_name"),
             "change": change, "before": p.get("current") or {},
             "change_pct": p.get("change_pct"), "rationale": p.get("rationale"),
             "source_proposal": p,
@@ -275,22 +313,72 @@ async def create_tickets_from_run(run_id: str) -> Dict[str, Any]:
     return {"created": len(created), "tickets": [t["id"] for t in created]}
 
 
-async def _current_campaign(sid: int, campaign_id: str) -> Dict[str, Any]:
-    res = await _data.fetch_dataset("sp_campaigns", {"sid": sid, "length": 300}, force=True)
+async def _current_value(intent: Dict[str, Any]) -> Dict[str, Any]:
+    """Live snapshot of the target's numeric value + state, if a read exists for
+    this op type; otherwise fall back to the intent's recorded ``before``."""
+    op = OP_TYPES.get(intent.get("op_type") or "")
+    if not op or not op.get("snapshot_dataset"):
+        return dict(intent.get("before") or {})
+    nf = op["num_field"]
+    res = await _data.fetch_dataset(op["snapshot_dataset"], {"sid": int(intent["sid"]), "length": 300}, force=True)
     for c in (res.get("rows") or []):
-        if str(c.get("campaign_id")) == str(campaign_id):
-            return {"daily_budget": c.get("daily_budget"), "state": c.get("state")}
-    return {}
+        if str(c.get(op["snapshot_id"])) == str(intent["target_id"]):
+            return {nf: c.get(nf), "state": c.get("state")}
+    return dict(intent.get("before") or {})
 
 
-def _build_put_body(intent: Dict[str, Any]) -> Dict[str, Any]:
-    change = intent.get("change") or {}
-    camp: Dict[str, Any] = {"campaignId": int(intent["campaign_id"]), "isBaseValue": 0}
-    if change.get("state"):
-        camp["state"] = change["state"]
-    if change.get("daily_budget") is not None:
-        camp["budget"] = {"budgetType": "DAILY", "budget": float(change["daily_budget"])}
-    return {"sid": int(intent["sid"]), "campaigns": [camp]}
+def build_body(intent: Dict[str, Any]) -> Dict[str, Any]:
+    """Construct the put* request body for any supported op type."""
+    op = OP_TYPES.get(intent.get("op_type") or "")
+    if not op:
+        raise _gw.LingXingError(f"未知操作类型: {intent.get('op_type')}")
+    ch = intent.get("change") or {}
+    nf = op["num_field"]
+    item: Dict[str, Any] = {op["id_field"]: int(intent["target_id"]), "isBaseValue": 0}
+    if ch.get("state"):
+        item["state"] = ch["state"]
+    if ch.get(nf) is not None:
+        if nf == "daily_budget":  # campaign budget is a nested object
+            item["budget"] = {"budgetType": "DAILY", "budget": float(ch[nf])}
+        else:                      # keyword/target bid, adgroup defaultBid
+            item[nf] = float(ch[nf])
+    return {"sid": int(intent["sid"]), op["array"]: [item]}
+
+
+async def create_manual_ticket(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a ticket from a hand-entered operation (any supported op type)."""
+    op_type = payload.get("op_type")
+    op = OP_TYPES.get(op_type or "")
+    if not op:
+        raise _gw.LingXingError(f"不支持的操作类型: {op_type}")
+    nf = op["num_field"]
+    if not payload.get("sid") or not payload.get("target_id"):
+        raise _gw.LingXingError("缺少 sid 或 目标ID")
+    change: Dict[str, Any] = {}
+    before: Dict[str, Any] = {}
+    if payload.get("new_value") not in (None, ""):
+        change[nf] = float(payload["new_value"])
+    if payload.get("new_state"):
+        change["state"] = payload["new_state"]
+    if payload.get("cur_value") not in (None, ""):
+        before[nf] = float(payload["cur_value"])
+    if payload.get("cur_state"):
+        before["state"] = payload["cur_state"]
+    if not change:
+        raise _gw.LingXingError("未指定任何改动（数值或状态）")
+    change_pct = None
+    if change.get(nf) is not None and before.get(nf):
+        try:
+            change_pct = round((float(change[nf]) - float(before[nf])) / float(before[nf]) * 100, 1)
+        except (TypeError, ValueError, ZeroDivisionError):
+            change_pct = None
+    intent = {
+        "op_type": op_type, "op_label": op["label"], "sid": payload["sid"],
+        "target_id": str(payload["target_id"]), "target_name": payload.get("target_name") or str(payload["target_id"]),
+        "change": change, "before": before, "change_pct": change_pct,
+        "rationale": payload.get("rationale") or "(人工新建)",
+    }
+    return await create_ticket(intent, source="manual")
 
 
 async def confirm_ticket(tid: str, decided_by: str = "human", dry_run: bool = False) -> Dict[str, Any]:
@@ -311,27 +399,27 @@ async def confirm_ticket(tid: str, decided_by: str = "human", dry_run: bool = Fa
             raise _gw.LingXingError("执行前护栏复检未通过")
 
         t["decided_by"] = decided_by
-        # capture rollback snapshot from live state
         intent = t["intent"]
-        snap = await _current_campaign(int(intent["sid"]), intent["campaign_id"])
-        t["snapshot"] = snap
-        body = _build_put_body(intent)
+        route = OP_TYPES[intent["op_type"]]["route"]
+        # capture rollback snapshot from live state (or recorded before)
+        t["snapshot"] = await _current_value(intent)
+        body = build_body(intent)
 
         if dry_run:
             t["status"] = "awaiting_human"  # unchanged; this is a preview
-            t["result"] = {"dry_run": True, "route": PUT_SP_CAMPAIGN_ROUTE, "body": body}
+            t["result"] = {"dry_run": True, "route": route, "body": body}
             _save(t)
             return t
 
         t["status"] = "executing"
         _save(t)
         try:
-            res = await _gw.call_openapi(PUT_SP_CAMPAIGN_ROUTE, body, method="POST",
+            res = await _gw.call_openapi(route, body, method="POST",
                                          caller="operate", allow_write=True)
             t["result"] = res
             t["status"] = "executed"
             _save(t)
-            await send_alert(f"已执行：店铺{intent['sid']} 活动{intent.get('campaign_name') or intent['campaign_id']} → {intent['change']}")
+            await send_alert(f"已执行：店铺{intent['sid']} {intent.get('target_name') or intent.get('target_id')} → {intent['change']}")
         except _gw.LingXingError as e:
             t["status"] = "failed"; t["error"] = str(e)
             _save(t)
@@ -365,16 +453,19 @@ async def rollback_ticket(tid: str, decided_by: str = "human") -> Dict[str, Any]
         if not snap:
             raise _gw.LingXingError("无回滚快照")
         intent = t["intent"]
+        op = OP_TYPES[intent["op_type"]]
+        nf = op["num_field"]
         change = {}
-        if snap.get("daily_budget") is not None:
-            change["daily_budget"] = snap["daily_budget"]
+        if snap.get(nf) is not None:
+            change[nf] = snap[nf]
         if snap.get("state"):
             change["state"] = snap["state"]
-        body = _build_put_body({"sid": intent["sid"], "campaign_id": intent["campaign_id"], "change": change})
-        res = await _gw.call_openapi(PUT_SP_CAMPAIGN_ROUTE, body, method="POST",
+        body = build_body({"op_type": intent["op_type"], "sid": intent["sid"],
+                           "target_id": intent["target_id"], "change": change})
+        res = await _gw.call_openapi(op["route"], body, method="POST",
                                      caller="operate-rollback", allow_write=True)
         t["status"] = "rolled_back"; t["result"] = {"rollback": res, "prev": t.get("result")}
         t["decided_by"] = decided_by
         _save(t)
-        await send_alert(f"已回滚：店铺{intent['sid']} 活动{intent.get('campaign_name') or intent['campaign_id']} → {change}")
+        await send_alert(f"已回滚：店铺{intent['sid']} {intent.get('target_name') or intent.get('target_id')} → {change}")
         return t

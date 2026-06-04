@@ -141,6 +141,31 @@ class ConfirmRequest(BaseModel):
     dry_run: bool = False
 
 
+class ManualTicket(BaseModel):
+    op_type: str
+    sid: int
+    target_id: str
+    target_name: str | None = None
+    cur_value: float | None = None
+    cur_state: str | None = None
+    new_value: float | None = None
+    new_state: str | None = None
+    rationale: str | None = None
+
+
+@router.get("/operate/op-types")
+async def operate_op_types() -> Dict[str, Any]:
+    return {"op_types": lxo.op_types_catalog()}
+
+
+@router.post("/operate/manual")
+async def operate_manual(body: ManualTicket) -> Dict[str, Any]:
+    try:
+        return await lxo.create_manual_ticket(body.model_dump())
+    except lx.LingXingError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.post("/operate/enable")
 async def operate_enable() -> Dict[str, Any]:
     st = lxo.enable_operate()
