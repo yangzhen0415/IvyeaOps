@@ -73,6 +73,21 @@ async def audit(limit: int = 100) -> Dict[str, Any]:
     return {"rows": lx.recent_audit(limit=max(1, min(limit, 500)))}
 
 
+@router.get("/optimizer/run")
+async def optimizer_run(sid: int, days: int = 0) -> Dict[str, Any]:
+    """Deterministic rule-engine candidates for one store (advisory).
+    Honors the configured target-ACOS-from-margin + conservative thresholds."""
+    from app.services import lingxing_optimizer as lxopt
+    if not lx.is_master_enabled():
+        raise HTTPException(status_code=400, detail="领星集成未启用（总开关关闭）")
+    if days:
+        _hs.save({"lingxing_opt_window_days": max(7, min(days, 60))})
+    try:
+        return await lxopt.run_store(int(sid))
+    except lx.LingXingError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.get("/dashboard")
 async def dashboard(sids: str = "", days: int = 7) -> Dict[str, Any]:
     """广告数据大盘聚合（按店铺/活动/天）。sids 逗号分隔，空=全部店铺。"""

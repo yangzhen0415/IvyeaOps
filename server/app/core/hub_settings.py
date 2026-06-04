@@ -128,6 +128,23 @@ _DEFAULTS: Dict[str, Any] = {
     "lingxing_auto_report_days": 7,       # how many days of ad reports to aggregate
     "lingxing_auto_stores": "",           # sids scope (csv); empty = all accessible stores
     "lingxing_auto_max_campaigns": 40,    # cap campaigns sent to the model per run
+    # --- 广告优化规则引擎 (deterministic optimizer) ------------------------
+    # Target ACOS is derived from product margin (break-even ACOS = margin):
+    #   target_acos = target_acos_factor * margin. Manual overrides win if set.
+    "lingxing_target_acos_factor": 0.7,
+    "lingxing_margin_override": 0,        # >0 = use this margin (fraction, e.g. 0.35) instead of profit data
+    "lingxing_target_acos_override": 0,   # >0 = use this target ACOS directly
+    "lingxing_opt_window_days": 30,       # aggregation window for the optimizer
+    "lingxing_opt_exclude_recent_days": 2,  # drop the most recent N days (attribution lag)
+    # conservative significance + step thresholds (user-set: 保守)
+    "lingxing_neg_min_clicks": 15,        # negate a search term: >= clicks AND 0 orders
+    "lingxing_bid_min_clicks": 15,        # min clicks before trusting ACOS for a bid-down
+    "lingxing_scale_min_orders": 3,       # min orders before scaling a winner (bid up)
+    "lingxing_harvest_min_orders": 3,     # min orders before harvesting a search term
+    "lingxing_bid_step_pct": 15,          # max bid step per change (%)
+    "lingxing_cooldown_days": 7,          # don't re-touch the same entity within N days
+    "lingxing_bid_floor": 0.02,           # min bid
+    "lingxing_bid_ceiling": 0,            # max bid (0 = no cap beyond break-even logic)
     # --- External-integration paths ----------------------------------------
     # Optional: IvyeaOps works standalone without any of these, but the
     # monitor page and agent picker light up when you point at the right
