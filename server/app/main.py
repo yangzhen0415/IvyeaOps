@@ -31,6 +31,7 @@ from app.routers import freight as freight_router
 from app.routers import deep_analysis as deep_analysis_router
 from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
+from app.routers import lingxing as lingxing_router
 from app.routers import mcp as mcp_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
 
@@ -216,6 +217,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[IvyeaOps] token archive init skipped: {e}")
 
+    try:
+        from app.services import lingxing_service
+        lingxing_service.init_db()
+        print("[IvyeaOps] lingxing audit DB ready")
+    except Exception as e:
+        print(f"[IvyeaOps] lingxing audit init skipped: {e}")
+
     async def _token_archive_loop():
         await asyncio.sleep(120)  # let boot settle before first snapshot
         while True:
@@ -369,6 +377,7 @@ app.include_router(projects_router.router, prefix="/api", tags=["projects"], dep
 app.include_router(git_router.router, prefix="/api", tags=["git"], dependencies=_ADMIN)
 app.include_router(setup_router.router, prefix="/api", tags=["setup"], dependencies=_ADMIN)
 app.include_router(autofix_router.router, prefix="/api", tags=["autofix"], dependencies=_ADMIN)
+app.include_router(lingxing_router.router, prefix="/api/lingxing", tags=["lingxing"], dependencies=_ADMIN)
 # --- Open to all registered users (analytical; AI forced HTTP-only) ---
 app.include_router(market_router.router, prefix="/api/market", tags=["market"])
 app.include_router(playbook_router.router, prefix="/api/playbook", tags=["playbook"])

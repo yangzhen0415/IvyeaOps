@@ -84,6 +84,40 @@ _DEFAULTS: Dict[str, Any] = {
     # repair flow (hermes in an isolated worktree, review-first). Off by default
     # — when off the frontend interceptor and backend engine never fire.
     "autofix_enabled": False,
+    # --- 领星 (LingXing) ERP -----------------------------------------------
+    # All LingXing traffic funnels through the IvyeaOps gateway; agents never
+    # see these credentials. Two backends: OpenAPI (data + ad-write) and the
+    # optional MCP (AI-native tools for the analysis agent).
+    # OpenAPI backbone (data reads + ad-write operations). Credentials from
+    # 领星 ERP 开放接口. Token is fetched/refreshed by the gateway and cached
+    # in data_dir/lingxing_token.json (never exposed to agents).
+    "lingxing_openapi_host": "https://openapi.lingxing.com",
+    "lingxing_openapi_appid": "",
+    "lingxing_openapi_secret": "",
+    "lingxing_openapi_min_interval_ms": 340,  # conservative pacing (~3/s) to avoid bans
+    # MCP backbone (optional — AI-native tools for the analysis agent once an
+    # X-Mcp-Key is generated in 领星后台).
+    "lingxing_mcp_key": "",
+    "lingxing_mcp_url": "http://openmcp.lingxing.com/mcp-servers/lingxing-mcp",
+    # Master enable for the whole integration (panels + automation). Off = the
+    # gateway refuses every call. Default off.
+    "lingxing_enabled": False,
+    # WRITE switch ("操作领星"). Off = gateway is strictly read-only and never
+    # advertises/permits write tools. Default off. Turning it on starts a
+    # countdown after which it auto-reverts to read-only (defence against
+    # leaving it on). 0 disables auto-expiry.
+    "lingxing_operate_enabled": False,
+    "lingxing_operate_expires_at": "",   # ISO ts; gateway treats write as off past this
+    "lingxing_operate_ttl_minutes": 120,  # how long the write switch stays on per activation
+    # Every write requires a human final confirmation in the UI (locked on by
+    # decision — no threshold-based auto-execute tier).
+    "lingxing_operate_require_human": True,
+    # Deterministic guardrails (hard caps, enforced in code regardless of AI
+    # reviews). Empty scope lists = nothing is writable until you whitelist.
+    "lingxing_scope_stores": "",          # comma-separated store ids/names allowed for writes
+    "lingxing_scope_asins": "",           # comma-separated ASINs allowed for writes ("*" = any in-store)
+    "lingxing_max_ops_per_run": 10,       # max write ops a single automation run may propose
+    "lingxing_max_change_pct": 20,        # max +/- % change a single op may make (bid/budget)
     # --- External-integration paths ----------------------------------------
     # Optional: IvyeaOps works standalone without any of these, but the
     # monitor page and agent picker light up when you point at the right

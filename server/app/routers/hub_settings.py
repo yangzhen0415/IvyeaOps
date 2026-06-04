@@ -18,6 +18,7 @@ _SECRET_KEYS: List[str] = [
     "apimart_key", "sorftime_key", "sif_key", "sellersprite_key",
     "hermes_api_key", "hermes_fallback_api_key", "gbrain_embed_api_key",
     "alert_app_secret", "alert_webhook", "openai_api_key",
+    "lingxing_mcp_key", "lingxing_openapi_secret",
 ]
 
 # Keys that, when changed, require syncing into Hermes config.
