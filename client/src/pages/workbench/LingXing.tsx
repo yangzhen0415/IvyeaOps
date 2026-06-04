@@ -5,6 +5,7 @@ import LingXingOperate from "./LingXingOperate";
 import LingXingAudit from "./LingXingAudit";
 import LingXingDashboard from "./LingXingDashboard";
 import LingXingOptimizer from "./LingXingOptimizer";
+import LingXingConfig from "./LingXingConfig";
 
 /* ── shared mini-styles (match workbench look) ─────────────────────────── */
 const inputStyle: React.CSSProperties = {
@@ -33,7 +34,7 @@ function readLS(): any { try { return JSON.parse(localStorage.getItem(LS_KEY) ||
 export default function LingXing() {
   const [status, setStatus] = useState<Status | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [view, setView] = useState<"dashboard" | "browse" | "optimizer" | "auto" | "operate" | "audit">(() => readLS().view || "dashboard");
+  const [view, setView] = useState<"dashboard" | "browse" | "optimizer" | "auto" | "operate" | "audit" | "config">(() => readLS().view || "dashboard");
   const [active, setActive] = useState<string>(() => readLS().active || "sellers");
   const [sellers, setSellers] = useState<any[]>([]);
   const [storeSid, setStoreSid] = useState<string>(() => readLS().storeSid || "");
@@ -58,6 +59,7 @@ export default function LingXing() {
         api.get("/lingxing/status"), api.get("/lingxing/datasets"),
       ]);
       setStatus(st.data); setDatasets(dl.data.datasets || []);
+      if (!st.data.openapi_configured) setView("config");  // onboarding: land on 配置
       if (st.data.master_enabled) void loadSellers();
     } catch (e: any) { setErr(humanErr(e)); }
   }
@@ -151,15 +153,9 @@ export default function LingXing() {
         )}
       </div>
 
-      {!status?.master_enabled ? (
-        <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: 12 }}>
-          领星数据未启用。点击上方「启用领星数据(只读)」开始浏览。<br />
-          <span style={{ fontSize: 11 }}>（写操作另有独立开关 + 三重复核，默认关闭）</span>
-        </div>
-      ) : (
-        <>
-        <div style={{ display: "flex", gap: 2, marginBottom: 10 }}>
-          {([["dashboard", "大盘"], ["browse", "数据浏览"], ["optimizer", "优化引擎"], ["auto", "自动化建议"], ["operate", "操作执行"], ["audit", "审计"]] as const).map(([v, l]) => (
+      <>
+        <div style={{ display: "flex", gap: 2, marginBottom: 10, flexWrap: "wrap" }}>
+          {([["dashboard", "大盘"], ["browse", "数据浏览"], ["optimizer", "优化引擎"], ["auto", "自动化建议"], ["operate", "操作执行"], ["audit", "审计"], ["config", "配置"]] as const).map(([v, l]) => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: "6px 14px", fontSize: 11, border: "none", borderRadius: 4, cursor: "pointer",
               background: view === v ? "var(--acc)" : "var(--bg2)", color: view === v ? "#000" : "var(--t2)",
@@ -167,7 +163,14 @@ export default function LingXing() {
             }}>{l}</button>
           ))}
         </div>
-        {view === "dashboard" ? <LingXingDashboard storeSid={storeSid} /> : view === "optimizer" ? <LingXingOptimizer storeSid={storeSid} /> : view === "auto" ? <LingXingAutomation /> : view === "operate" ? <LingXingOperate /> : view === "audit" ? <LingXingAudit /> : (
+        {view === "config" ? <LingXingConfig />
+          : !status?.master_enabled ? (
+            <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: 12 }}>
+              领星数据未启用。请到「配置」tab 填好 OpenAPI 凭证、测试连接后启用。<br />
+              <span style={{ fontSize: 11 }}>（写操作另有独立「操作开关」+ 三重复核，默认关闭）</span>
+            </div>
+          )
+          : view === "dashboard" ? <LingXingDashboard storeSid={storeSid} /> : view === "optimizer" ? <LingXingOptimizer storeSid={storeSid} /> : view === "auto" ? <LingXingAutomation /> : view === "operate" ? <LingXingOperate /> : view === "audit" ? <LingXingAudit /> : (
         <div style={{ display: "flex", gap: 12 }}>
           {/* dataset list */}
           <div style={{ width: 180, flexShrink: 0 }}>
@@ -240,7 +243,6 @@ export default function LingXing() {
         </div>
         )}
         </>
-      )}
     </div>
   );
 }
