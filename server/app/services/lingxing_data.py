@@ -108,6 +108,18 @@ READ_DATASETS: Dict[str, Dict[str, Any]] = {
         "columns": [_col("campaign_id", "活动ID"), _col("impressions", "曝光"), _col("clicks", "点击"),
                     _col("cost", "花费"), _col("orders", "订单"), _col("sales", "销售额")],
     },
+    "sp_product_ads": {
+        "label": "SP 投放商品", "group": "广告", "route": "/pb/openapi/newad/spProductAds",
+        "method": "POST",
+        "params": [
+            {"name": "sid", "required": True, "type": "int", "label": "店铺SID"},
+            {"name": "state", "type": "string", "label": "状态"},
+            {"name": "length", "type": "int", "default": 200}, {"name": "offset", "type": "int", "default": 0},
+        ],
+        "columns": [_col("ad_id", "广告ID"), _col("asin", "ASIN"), _col("sku", "SKU"),
+                    _col("campaign_id", "活动ID"), _col("ad_group_id", "广告组ID"), _col("state", "状态")],
+        "hint": "活动投放的 ASIN —— 用于把活动映射到产品毛利(per-campaign 目标ACOS)。",
+    },
     "sp_keyword_report": {
         "label": "SP 关键词报表", "group": "广告", "route": "/pb/openapi/newad/spKeywordReports",
         "method": "POST",

@@ -20,6 +20,10 @@ export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState<Record<number, string>>({});
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [adgroups, setAdgroups] = useState<any[]>([]);
+  const [hForm, setHForm] = useState<Record<number, any>>({});
+  const setH = (i: number, k: string, v: any) => setHForm((f) => ({ ...f, [i]: { ...f[i], [k]: v } }));
   const cur: Cur | undefined = sidCurrencyMap(sellers)[sid];
 
   useEffect(() => { void load(); }, []);
@@ -33,12 +37,39 @@ export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
   async function run() {
     if (!sid) return;
     setLoading(true); setErr(""); setData(null); setDone({});
-    try { setData((await api.get(`/lingxing/optimizer/run?sid=${sid}&days=${days}`)).data); }
+    try {
+      const d = (await api.get(`/lingxing/optimizer/run?sid=${sid}&days=${days}`)).data;
+      setData(d);
+      if ((d.candidates || []).some((c: any) => c.harvest)) void loadDest();
+    }
     catch (e: any) { setErr(humanErr(e)); } finally { setLoading(false); }
+  }
+  async function loadDest() {
+    try {
+      const [cp, ag] = await Promise.all([
+        api.post("/lingxing/read/sp_campaigns", { params: { sid: Number(sid), length: 300 } }),
+        api.post("/lingxing/read/sp_adgroups", { params: { sid: Number(sid), length: 300 } }),
+      ]);
+      setCampaigns((cp.data.rows || []).filter((c: any) => c.targeting_type === "manual"));
+      setAdgroups(ag.data.rows || []);
+    } catch { /* */ }
   }
   async function makeTicket(c: any, i: number) {
     try {
       const r = await api.post("/lingxing/operate/manual", c.payload);
+      setDone((d) => ({ ...d, [i]: r.data.id }));
+    } catch (e: any) { setErr(humanErr(e)); }
+  }
+  async function makeHarvest(c: any, i: number) {
+    const h = hForm[i] || {};
+    if (!h.campaign_id || !h.ad_group_id) return;
+    try {
+      const r = await api.post("/lingxing/operate/manual", {
+        op_type: "add_keyword", sid: Number(sid), campaign_id: h.campaign_id, ad_group_id: h.ad_group_id,
+        keyword_text: c.harvest.query, match_type: "EXACT", bid: Number(h.bid ?? c.harvest.suggested_bid),
+        rationale: `收割：搜索词「${c.harvest.query}」已 ${c.metrics?.orders} 单，加入精准活动，建议bid ${c.harvest.suggested_bid}`,
+        opt: { lever: "收割", rule: c.rule, significance: c.significance, metrics: c.metrics, target_acos: c.opt_target, breakeven_acos: c.opt_breakeven },
+      });
       setDone((d) => ({ ...d, [i]: r.data.id }));
     } catch (e: any) { setErr(humanErr(e)); }
   }
@@ -81,8 +112,21 @@ export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
               </span>
             )}
             <span style={{ marginLeft: "auto" }}>
-              {c.advisory
-                ? <span style={{ fontSize: 10, color: "var(--purple)" }}>建议（需指定目标精准活动）</span>
+              {c.harvest
+                ? (done[i]
+                  ? <span style={{ fontSize: 10, color: "var(--acc)" }}>✓ 工单 {done[i]}</span>
+                  : <span style={{ display: "inline-flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
+                      <select value={hForm[i]?.campaign_id || ""} onChange={(e) => setH(i, "campaign_id", e.target.value)} style={{ ...inputStyle, maxWidth: 130 }}>
+                        <option value="">目标活动(manual)</option>
+                        {campaigns.map((cp) => <option key={cp.campaign_id} value={cp.campaign_id}>{cp.name || cp.campaign_id}</option>)}
+                      </select>
+                      <select value={hForm[i]?.ad_group_id || ""} onChange={(e) => setH(i, "ad_group_id", e.target.value)} style={{ ...inputStyle, maxWidth: 110 }}>
+                        <option value="">广告组</option>
+                        {adgroups.filter((a) => String(a.campaign_id) === String(hForm[i]?.campaign_id)).map((a) => <option key={a.ad_group_id} value={a.ad_group_id}>{a.name || a.ad_group_id}</option>)}
+                      </select>
+                      <input value={hForm[i]?.bid ?? c.harvest.suggested_bid} onChange={(e) => setH(i, "bid", e.target.value)} style={{ ...inputStyle, width: 64 }} title="精准词bid" />
+                      <Btn onClick={() => makeHarvest(c, i)} disabled={!hForm[i]?.campaign_id || !hForm[i]?.ad_group_id}>生成工单</Btn>
+                    </span>)
                 : done[i]
                   ? <span style={{ fontSize: 10, color: "var(--acc)" }}>✓ 工单 {done[i]}</span>
                   : <Btn onClick={() => makeTicket(c, i)}>生成工单</Btn>}
