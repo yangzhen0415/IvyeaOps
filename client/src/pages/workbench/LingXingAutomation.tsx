@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { sidCurrencyMap, fmtBudget, type Cur } from "./lingxingCurrency";
+import SheetSelect from "../../components/SheetSelect";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
@@ -71,13 +72,11 @@ export default function LingXingAutomation() {
         <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8 }}>定时建议（仅分析+建议，不写入领星）</div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <label style={lbl}><span>启用定时</span>
-            <select value={String(!!cfg.lingxing_auto_enabled)} onChange={(e) => set("lingxing_auto_enabled", e.target.value === "true")} style={{ ...inputStyle, width: 80 }}>
-              <option value="false">关</option><option value="true">开</option>
-            </select></label>
+            <SheetSelect value={String(!!cfg.lingxing_auto_enabled)} onChange={(v) => set("lingxing_auto_enabled", v === "true")} title="启用定时" style={{ ...inputStyle, width: 90 }}
+              options={[{ value: "false", label: "关" }, { value: "true", label: "开" }]} /></label>
           <label style={lbl}><span>星期</span>
-            <select value={String(cfg.lingxing_auto_weekday ?? 0)} onChange={(e) => set("lingxing_auto_weekday", Number(e.target.value))} style={{ ...inputStyle, width: 80 }}>
-              {WEEKDAYS.map((w, i) => <option key={i} value={i}>{w}</option>)}
-            </select></label>
+            <SheetSelect value={String(cfg.lingxing_auto_weekday ?? 0)} onChange={(v) => set("lingxing_auto_weekday", Number(v))} title="星期" style={{ ...inputStyle, width: 90 }}
+              options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} /></label>
           <label style={lbl}><span>小时</span>
             <input value={cfg.lingxing_auto_hour ?? 9} onChange={(e) => set("lingxing_auto_hour", Number(e.target.value))} style={{ ...inputStyle, width: 70 }} /></label>
           <label style={lbl}><span>分析天数</span>

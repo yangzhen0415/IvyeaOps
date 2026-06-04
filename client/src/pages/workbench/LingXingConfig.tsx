@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
+import SheetSelect from "../../components/SheetSelect";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
@@ -130,9 +131,8 @@ export default function LingXingConfig() {
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {personas.map((pn, i) => (
             <Field key={i} label={`复核${i + 1}：${pn}`}>
-              <select value={provs[i] || "deepseek"} onChange={(e) => { const n = [...provs]; n[i] = e.target.value; void saveProvs(n); }} style={{ ...inputStyle, minWidth: 170 }}>
-                {avail.map((a) => <option key={a.id} value={a.id} disabled={!a.ok}>{a.label}{a.ok ? "" : "（未配置/未装）"}</option>)}
-              </select>
+              <SheetSelect value={provs[i] || "deepseek"} onChange={(v) => { const n = [...provs]; n[i] = v; void saveProvs(n); }} title="选择模型" style={{ ...inputStyle, minWidth: 170 }}
+                options={avail.map((a) => ({ value: a.id, label: a.label + (a.ok ? "" : "（未配置/未装）"), disabled: !a.ok }))} />
             </Field>
           ))}
         </div>

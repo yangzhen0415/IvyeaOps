@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import TrendChart, { type TrendSeries } from "./home/TrendChart";
+import SheetSelect from "../../components/SheetSelect";
 import { sidCurrencyMap, fmtBudget, type Cur } from "./lingxingCurrency";
 
 const inputStyle: React.CSSProperties = {
@@ -63,9 +64,8 @@ export default function LingXingDashboard({ storeSid }: { storeSid?: string }) {
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>窗口</span>
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ ...inputStyle, width: 90 }}>
-          {[7, 14, 30].map((d) => <option key={d} value={d}>近 {d} 天</option>)}
-        </select>
+        <SheetSelect value={String(days)} onChange={(v) => setDays(Number(v))} title="时间窗口" style={{ ...inputStyle, width: 100 }}
+          options={[7, 14, 30].map((d) => ({ value: String(d), label: `近 ${d} 天` }))} />
         <Btn onClick={load} disabled={loading}>{loading ? "聚合中…" : "刷新"}</Btn>
         {err && <span style={{ fontSize: 11, color: "var(--red)" }}>{err}</span>}
         <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>币种随店铺（{cur?.code || "—"}）</span>

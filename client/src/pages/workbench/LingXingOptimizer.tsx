@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { sidCurrencyMap, fmtBudget, type Cur } from "./lingxingCurrency";
+import SheetSelect from "../../components/SheetSelect";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
@@ -79,9 +80,8 @@ export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>窗口</span>
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ ...inputStyle, width: 90 }}>
-          {[14, 30, 60].map((d) => <option key={d} value={d}>近 {d} 天</option>)}
-        </select>
+        <SheetSelect value={String(days)} onChange={(v) => setDays(Number(v))} title="时间窗口" style={{ ...inputStyle, width: 100 }}
+          options={[14, 30, 60].map((d) => ({ value: String(d), label: `近 ${d} 天` }))} />
         <Btn primary onClick={run} disabled={loading}>{loading ? "分析中…(首次较慢)" : "运行优化引擎"}</Btn>
         {err && <span style={{ fontSize: 11, color: "var(--red)" }}>{err}</span>}
       </div>
@@ -113,14 +113,10 @@ export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
                 ? (done[i]
                   ? <span style={{ fontSize: 10, color: "var(--acc)" }}>✓ 工单 {done[i]}</span>
                   : <span style={{ display: "inline-flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
-                      <select value={hForm[i]?.campaign_id || ""} onChange={(e) => setH(i, "campaign_id", e.target.value)} style={{ ...inputStyle, maxWidth: 130 }}>
-                        <option value="">目标活动(manual)</option>
-                        {campaigns.map((cp) => <option key={cp.campaign_id} value={cp.campaign_id}>{cp.name || cp.campaign_id}</option>)}
-                      </select>
-                      <select value={hForm[i]?.ad_group_id || ""} onChange={(e) => setH(i, "ad_group_id", e.target.value)} style={{ ...inputStyle, maxWidth: 110 }}>
-                        <option value="">广告组</option>
-                        {adgroups.filter((a) => String(a.campaign_id) === String(hForm[i]?.campaign_id)).map((a) => <option key={a.ad_group_id} value={a.ad_group_id}>{a.name || a.ad_group_id}</option>)}
-                      </select>
+                      <SheetSelect value={String(hForm[i]?.campaign_id || "")} onChange={(v) => setH(i, "campaign_id", v)} title="目标活动(manual)" placeholder="目标活动" style={{ ...inputStyle, maxWidth: 140 }}
+                        options={campaigns.map((cp) => ({ value: String(cp.campaign_id), label: String(cp.name || cp.campaign_id) }))} />
+                      <SheetSelect value={String(hForm[i]?.ad_group_id || "")} onChange={(v) => setH(i, "ad_group_id", v)} title="广告组" placeholder="广告组" style={{ ...inputStyle, maxWidth: 120 }}
+                        options={adgroups.filter((a) => String(a.campaign_id) === String(hForm[i]?.campaign_id)).map((a) => ({ value: String(a.ad_group_id), label: String(a.name || a.ad_group_id) }))} />
                       <input value={hForm[i]?.bid ?? c.harvest.suggested_bid} onChange={(e) => setH(i, "bid", e.target.value)} style={{ ...inputStyle, width: 64 }} title="精准词bid" />
                       <Btn onClick={() => makeHarvest(c, i)} disabled={!hForm[i]?.campaign_id || !hForm[i]?.ad_group_id}>生成工单</Btn>
                     </span>)

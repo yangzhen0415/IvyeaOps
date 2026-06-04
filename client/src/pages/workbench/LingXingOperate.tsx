@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { sidCurrencyMap, fmtBudget, type Cur } from "./lingxingCurrency";
 import { useConfirm } from "../../components/ConfirmDialog";
+import SheetSelect from "../../components/SheetSelect";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
@@ -124,10 +125,8 @@ export default function LingXingOperate() {
       {/* generate tickets from a run */}
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>从分析运行生成工单</span>
-        <select value={runId} onChange={(e) => setRunId(e.target.value)} style={{ ...inputStyle, minWidth: 220 }}>
-          {runs.length === 0 && <option value="">（无运行记录）</option>}
-          {runs.map((r) => <option key={r.id} value={r.id}>{fmtTs(r.started_at)} · {r.summary?.slice(0, 20) || r.status}</option>)}
-        </select>
+        <SheetSelect value={runId} onChange={setRunId} title="选择分析运行" placeholder="（无运行记录）" style={{ ...inputStyle, minWidth: 220 }}
+          options={runs.map((r) => ({ value: String(r.id), label: `${fmtTs(r.started_at)} · ${r.summary?.slice(0, 20) || r.status}` }))} />
         <Btn onClick={genFromRun} disabled={busy || !runId}>生成工单（进入复核）</Btn>
         <span style={{ marginLeft: "auto" }}><Btn onClick={() => setShowManual((v) => !v)}>{showManual ? "收起" : "＋ 新建工单"}</Btn></span>
         {msg && <span style={{ fontSize: 11, color: "var(--t3)" }}>{msg}</span>}
@@ -140,18 +139,15 @@ export default function LingXingOperate() {
           <div className="card" style={{ padding: 12, marginBottom: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8 }}>新建写操作工单（走 三复核 + 护栏 + 人工确认）</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <L t="操作类型"><select value={mForm.op_type} onChange={(e) => setMForm({ op_type: e.target.value, sid: mForm.sid })} style={{ ...inputStyle, minWidth: 170 }}>
-                {opTypes.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-              </select></L>
-              <L t="店铺"><select value={mForm.sid ?? ""} onChange={(e) => mSet("sid", Number(e.target.value))} style={{ ...inputStyle, minWidth: 140 }}>
-                {sellers.map((s) => <option key={s.sid} value={s.sid}>{s.name || s.sid}</option>)}
-              </select></L>
+              <L t="操作类型"><SheetSelect value={mForm.op_type} onChange={(v) => setMForm({ op_type: v, sid: mForm.sid })} title="操作类型" style={{ ...inputStyle, minWidth: 170 }}
+                options={opTypes.map((o) => ({ value: o.key, label: o.label }))} /></L>
+              <L t="店铺"><SheetSelect value={String(mForm.sid ?? "")} onChange={(v) => mSet("sid", Number(v))} title="选择店铺" style={{ ...inputStyle, minWidth: 140 }}
+                options={sellers.map((s) => ({ value: String(s.sid), label: String(s.name || s.sid) }))} /></L>
               {(op?.fields || []).map((f: any) => (
                 <L key={f.name} t={f.label + (f.required ? " *" : "")}>
                   {f.type === "select"
-                    ? <select value={mForm[f.name] ?? ""} onChange={(e) => mSet(f.name, e.target.value)} style={{ ...inputStyle, minWidth: 110 }}>
-                        {f.options.map((o: string) => <option key={o} value={o}>{o || "不改"}</option>)}
-                      </select>
+                    ? <SheetSelect value={String(mForm[f.name] ?? "")} onChange={(v) => mSet(f.name, v)} title={f.label} placeholder="不改" style={{ ...inputStyle, minWidth: 110 }}
+                        options={f.options.map((o: string) => ({ value: o, label: o || "不改" }))} />
                     : <input value={mForm[f.name] ?? ""} onChange={(e) => mSet(f.name, e.target.value)}
                         style={{ ...inputStyle, width: f.type === "number" ? 100 : 150 }} placeholder={f.type === "number" ? "数字" : ""} />}
                 </L>

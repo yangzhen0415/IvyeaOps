@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import SheetSelect from "../../components/SheetSelect";
 import LingXingAutomation from "./LingXingAutomation";
 import LingXingOperate from "./LingXingOperate";
 import LingXingAudit from "./LingXingAudit";
@@ -144,12 +145,9 @@ export default function LingXing() {
         {status?.master_enabled && (
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺</span>
-            <select value={storeSid} onChange={(e) => setStoreSid(e.target.value)} style={{ ...inputStyle, minWidth: 160 }}>
-              {sellers.length === 0 && <option value="">（加载中/无）</option>}
-              {sellers.map((s) => (
-                <option key={s.sid} value={String(s.sid)}>{s.name || s.sid}（{s.sid}）</option>
-              ))}
-            </select>
+            <SheetSelect value={storeSid} onChange={setStoreSid} title="选择店铺" placeholder="（加载中/无）"
+              style={{ ...inputStyle, minWidth: 160 }}
+              options={sellers.map((s) => ({ value: String(s.sid), label: String(s.name || s.sid), sub: String(s.sid) }))} />
           </span>
         )}
       </div>
