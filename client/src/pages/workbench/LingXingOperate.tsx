@@ -199,11 +199,11 @@ function TicketStatus({ s }: { s: string }) {
 function fmtChange(c: any) {
   if (!c) return "—";
   const a = [];
-  if (c.daily_budget != null) a.push(`预算→$${c.daily_budget}`);
+  if (c.daily_budget != null) a.push(`预算→${c.daily_budget}`);
   if (c.state) a.push(`状态→${c.state}`);
   return a.join(" / ") || "—";
 }
-function fmtState(o: any) { if (!o) return "—"; const a = []; if (o.state) a.push(o.state); if (o.daily_budget != null) a.push(`$${o.daily_budget}`); return a.join(" / ") || "—"; }
+function fmtState(o: any) { if (!o) return "—"; const a = []; if (o.state) a.push(o.state); if (o.daily_budget != null) a.push(`${o.daily_budget}`); return a.join(" / ") || "—"; }
 function fmtDur(s: number) { const m = Math.floor(s / 60); return m >= 60 ? `${Math.floor(m / 60)}h${m % 60}m` : `${m}m`; }
 function fmtTs(ts?: string) { if (!ts) return "—"; try { return new Date(ts).toLocaleString("zh-CN", { hour12: false }); } catch { return ts; } }
 function humanErr(e: any): string { return e?.response?.data?.detail || e?.message || "请求失败"; }

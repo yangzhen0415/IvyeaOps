@@ -164,7 +164,7 @@ function RiskTag({ r }: { r: string }) {
 function fmtState(o: any) {
   if (!o || typeof o !== "object") return "—";
   const b = o.daily_budget, s = o.state;
-  return [s, b != null ? `$${b}` : null].filter(Boolean).join(" / ") || "—";
+  return [s, b != null ? `${b}` : null].filter(Boolean).join(" / ") || "—";
 }
 function fmtTs(ts?: string) { if (!ts) return "—"; try { return new Date(ts).toLocaleString("zh-CN", { hour12: false }); } catch { return ts; } }
 function humanErr(e: any): string { return e?.response?.data?.detail || e?.message || "请求失败"; }
