@@ -1,6 +1,6 @@
 import { useState, useCallback, createContext, useContext } from "react";
 
-type ConfirmOptions = { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean };
+type ConfirmOptions = { title?: string; message: string; confirmText?: string; cancelText?: string; danger?: boolean; icon?: string };
 type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
 
 const ConfirmContext = createContext<ConfirmFn>(() => Promise.resolve(false));
@@ -26,7 +26,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           <div className="confirm-card" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-body">
               <div className={`confirm-icon-ring ${state.danger ? "danger" : "normal"}`}>
-                {state.danger ? "🗑" : "?"}
+                {state.icon ?? (state.danger ? "🗑" : "?")}
               </div>
               {state.title && <div className="confirm-title">{state.title}</div>}
               <div className="confirm-msg">{state.message}</div>
