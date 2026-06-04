@@ -14,7 +14,7 @@ const pct = (v: any) => (v == null ? "—" : (v * 100).toFixed(0) + "%");
 
 export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
   const [sellers, setSellers] = useState<any[]>([]);
-  const [sid, setSid] = useState<string>(storeSid || "");
+  const sid = storeSid || "";   // store is driven by the page-level selector
   const [days, setDays] = useState(30);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -31,9 +31,9 @@ export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
     try {
       const r = await api.post("/lingxing/read/sellers", { params: {} });
       setSellers(r.data.rows || []);
-      if (!sid && r.data.rows?.[0]) setSid(String(r.data.rows[0].sid));
     } catch (e: any) { setErr(humanErr(e)); }
   }
+  useEffect(() => { setData(null); setDone({}); }, [storeSid]);  // clear stale candidates on store change
   async function run() {
     if (!sid) return;
     setLoading(true); setErr(""); setData(null); setDone({});
@@ -77,10 +77,7 @@ export default function LingXingOptimizer({ storeSid }: { storeSid?: string }) {
   return (
     <div>
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺</span>
-        <select value={sid} onChange={(e) => setSid(e.target.value)} style={{ ...inputStyle, minWidth: 150 }}>
-          {sellers.map((s) => <option key={s.sid} value={String(s.sid)}>{s.name || s.sid}</option>)}
-        </select>
+        <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>窗口</span>
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ ...inputStyle, width: 90 }}>
           {[14, 30, 60].map((d) => <option key={d} value={d}>近 {d} 天</option>)}

@@ -14,9 +14,9 @@ function Btn({ onClick, children, disabled }: any) {
 const pct = (v: any) => (v == null ? "—" : (v * 100).toFixed(1) + "%");
 const num = (v: any) => (v == null ? "—" : Number(v).toLocaleString("en-US"));
 
-export default function LingXingDashboard({ storeSid: initSid }: { storeSid?: string }) {
+export default function LingXingDashboard({ storeSid }: { storeSid?: string }) {
   const [sellers, setSellers] = useState<any[]>([]);
-  const [sid, setSid] = useState<string>(initSid || "");
+  const sid = storeSid || "";   // store is driven by the page-level selector
   const [days, setDays] = useState<number>(7);
   const [data, setData] = useState<any>(null);
   const [cmp, setCmp] = useState<any>(null);       // all-store comparison (opt-in)
@@ -30,13 +30,11 @@ export default function LingXingDashboard({ storeSid: initSid }: { storeSid?: st
   async function loadSellers() {
     try {
       const r = await api.post("/lingxing/read/sellers", { params: {} });
-      const list = r.data.rows || [];
-      setSellers(list);
-      if (!sid && list[0]) setSid(String(list[0].sid));
+      setSellers(r.data.rows || []);
     } catch (e: any) { setErr(humanErr(e)); }
   }
 
-  useEffect(() => { if (sid) void load(); /* eslint-disable-next-line */ }, [sid, days]);
+  useEffect(() => { if (sid) void load(); /* eslint-disable-next-line */ }, [storeSid, days]);
   async function load() {
     setLoading(true); setErr("");
     try { setData((await api.get(`/lingxing/dashboard?sids=${sid}&days=${days}`)).data); }
@@ -63,10 +61,7 @@ export default function LingXingDashboard({ storeSid: initSid }: { storeSid?: st
     <div>
       {/* scope */}
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺</span>
-        <select value={sid} onChange={(e) => setSid(e.target.value)} style={{ ...inputStyle, minWidth: 160 }}>
-          {sellers.map((s) => <option key={s.sid} value={String(s.sid)}>{s.name || s.sid}</option>)}
-        </select>
+        <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>窗口</span>
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ ...inputStyle, width: 90 }}>
           {[7, 14, 30].map((d) => <option key={d} value={d}>近 {d} 天</option>)}
