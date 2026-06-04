@@ -28,6 +28,7 @@ const NAV: NavSection[] = [
       { to: "/playbook", icon: "◎", label: "打法推荐" },
       { to: "/listing", icon: "◧", label: "Listing工作台", admin: true, key: "listing" },
       { to: "/tools", icon: "⊕", label: "分析工具", admin: true, key: "tools" },
+      { to: "/lingxing", icon: "◭", label: "领星 ERP", admin: true },
       { to: "/skill-hub", icon: "✦", label: "Skill 中心", admin: true, key: "skill-hub" },
     ],
   },
@@ -61,6 +62,7 @@ const NAV: NavSection[] = [
 const PATH_LABEL: Record<string, string> = {
   "/": "~/首页",
   "/tools": "~/分析工具",
+  "/lingxing": "~/领星ERP",
   "/listing": "~/Listing工作台",
   "/freight": "~/头程比价",
   "/market": "~/市场调研",

@@ -11,13 +11,20 @@ review, human confirm) land in P3.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.services import lingxing_service as lx
+from app.services import lingxing_data as lxd
 
 router = APIRouter()
+
+
+class ReadRequest(BaseModel):
+    params: Dict[str, Any] = {}
+    force: bool = False
 
 
 @router.get("/status")
@@ -49,3 +56,19 @@ async def probe() -> Dict[str, Any]:
 @router.get("/audit")
 async def audit(limit: int = 100) -> Dict[str, Any]:
     return {"rows": lx.recent_audit(limit=max(1, min(limit, 500)))}
+
+
+@router.get("/datasets")
+async def datasets() -> Dict[str, Any]:
+    """Read-dataset registry that drives the 浏览/分析 panels."""
+    return {"datasets": lxd.catalog()}
+
+
+@router.post("/read/{dataset}")
+async def read(dataset: str, body: ReadRequest) -> Dict[str, Any]:
+    try:
+        return await lxd.fetch_dataset(dataset, body.params, force=body.force, caller="panel")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except lx.LingXingError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

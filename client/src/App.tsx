@@ -31,6 +31,7 @@ import IdeaSkill from "./pages/workbench/IdeaSkill";
 import SkillTools from "./pages/workbench/SkillTools";
 import SkillHub from "./pages/workbench/SkillHub";
 import DeepAnalysis from "./pages/workbench/DeepAnalysis";
+import LingXing from "./pages/workbench/LingXing";
 import { me } from "./api/client";
 import { getSetupStatus, type SetupChecks } from "./api/setup";
 
@@ -145,6 +146,7 @@ export default function App() {
             <Route path="skill-tools" element={<SkillTools />} />
             <Route path="skill-hub" element={<SkillHub />} />
             <Route path="deep-analysis" element={<DeepAnalysis />} />
+            <Route path="lingxing" element={<LingXing />} />
             <Route path="hub-settings" element={<HubSettings />} />
             <Route path="*" element={<NotFound />} />
           </Route>

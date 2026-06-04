@@ -1,0 +1,232 @@
+"""领星 read-data layer: a config-driven dataset registry + local cache.
+
+The 浏览/分析 panels are driven by :data:`READ_DATASETS` — each entry maps a
+friendly dataset key to a real OpenAPI read route, its parameter schema (for the
+UI form), and the columns worth showing. Fetches go through the gateway
+(:func:`lingxing_service.call_openapi_read`, so master-switch + rate-limit +
+audit all apply) and are cached in ``lingxing_cache`` to respect the API rate
+limit and make repeat views instant.
+
+Adding a dataset = one registry entry; no panel code changes.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+from app.core import hub_settings as _hs
+from app.services import lingxing_service as _gw
+
+# Default cache freshness (seconds). Panels can force-refresh.
+_DEFAULT_TTL_S = 1800
+
+
+def _col(key: str, label: str) -> Dict[str, str]:
+    return {"key": key, "label": label}
+
+
+# dataset key -> spec. ``params`` types: string|int|date|sids (csv→list[int]).
+# ``date`` defaults accept relative tokens like "-1d"/"-7d" resolved at call time.
+READ_DATASETS: Dict[str, Dict[str, Any]] = {
+    "sellers": {
+        "label": "店铺列表", "group": "基础", "route": "/erp/sc/data/seller/lists",
+        "method": "GET", "params": [], "row_key": "sid",
+        "columns": [_col("sid", "SID"), _col("name", "店铺"), _col("marketplace", "站点"),
+                    _col("country", "国家"), _col("seller_id", "SellerID"), _col("region", "区域")],
+        "hint": "所有可访问店铺；其它数据集的 sid 来自这里。",
+    },
+    "fba_stock": {
+        "label": "FBA 库存", "group": "库存", "route": "/erp/sc/routing/fba/fbaStock/fbaList",
+        "method": "POST",
+        "params": [
+            {"name": "sid", "required": True, "type": "string", "label": "店铺SID(逗号分隔)"},
+            {"name": "length", "type": "int", "default": 50, "label": "条数"},
+            {"name": "offset", "type": "int", "default": 0, "label": "偏移"},
+        ],
+        "columns": [_col("msku", "MSKU"), _col("asin", "ASIN"), _col("product_name", "品名"),
+                    _col("afn_fulfillable_quantity", "可售"), _col("total_fulfillable_quantity", "总可用"),
+                    _col("afn_inbound_shipped_quantity", "在途"), _col("afn_unsellable_quantity", "不可售")],
+    },
+    "sp_campaigns": {
+        "label": "SP 广告活动", "group": "广告", "route": "/pb/openapi/newad/spCampaigns",
+        "method": "POST",
+        "params": [
+            {"name": "sid", "required": True, "type": "int", "label": "店铺SID"},
+            {"name": "state", "type": "string", "label": "状态(enabled/paused/archived)"},
+            {"name": "length", "type": "int", "default": 50}, {"name": "offset", "type": "int", "default": 0},
+        ],
+        "columns": [_col("campaign_id", "活动ID"), _col("name", "活动名"), _col("state", "状态"),
+                    _col("daily_budget", "日预算"), _col("targeting_type", "投放")],
+        "hint": "广告活动的预算/状态 —— 也是后续受控写操作的前置数据。",
+    },
+    "sp_campaign_report": {
+        "label": "SP 活动报表", "group": "广告", "route": "/pb/openapi/newad/spCampaignReports",
+        "method": "POST",
+        "params": [
+            {"name": "sid", "required": True, "type": "int", "label": "店铺SID"},
+            {"name": "report_date", "required": True, "type": "date", "default": "-1d", "label": "报表日期"},
+            {"name": "length", "type": "int", "default": 50}, {"name": "offset", "type": "int", "default": 0},
+        ],
+        "columns": [_col("campaign_id", "活动ID"), _col("impressions", "曝光"), _col("clicks", "点击"),
+                    _col("cost", "花费"), _col("orders", "订单"), _col("sales", "销售额")],
+    },
+    "asin_profit": {
+        "label": "ASIN 利润", "group": "财务", "route": "/bd/profit/statistics/open/asin/list",
+        "method": "POST",
+        "params": [
+            {"name": "sids", "type": "sids", "label": "店铺SID(逗号分隔,可空=全部)"},
+            {"name": "startDate", "required": True, "type": "date", "default": "-7d", "label": "起始(≤7天跨度)"},
+            {"name": "endDate", "required": True, "type": "date", "default": "-1d", "label": "结束"},
+            {"name": "length", "type": "int", "default": 50}, {"name": "offset", "type": "int", "default": 0},
+        ],
+        "columns": [_col("asin", "ASIN"), _col("storeName", "店铺"), _col("totalSalesAmount", "销售额"),
+                    _col("totalAdsCost", "广告花费"), _col("grossProfit", "毛利"), _col("grossRate", "毛利率")],
+    },
+}
+
+
+def catalog() -> List[Dict[str, Any]]:
+    """Registry view for the UI (key/label/group/params/columns/hint)."""
+    out = []
+    for key, d in READ_DATASETS.items():
+        out.append({
+            "key": key, "label": d["label"], "group": d.get("group", ""),
+            "params": d.get("params", []), "columns": d.get("columns", []),
+            "hint": d.get("hint", ""), "method": d["method"],
+        })
+    return out
+
+
+def _resolve_date(token: Any) -> Any:
+    """Resolve relative date tokens like '-1d'/'-7d'/'0d' to YYYY-MM-DD."""
+    if not isinstance(token, str) or not token:
+        return token
+    t = token.strip()
+    if t.endswith("d") and (t[:-1].lstrip("-").isdigit()):
+        days = int(t[:-1])
+        return (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d")
+    return token
+
+
+def _coerce(spec_params: List[Dict[str, Any]], given: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate + coerce user params against the dataset schema; fill defaults."""
+    out: Dict[str, Any] = {}
+    for p in spec_params:
+        name, typ = p["name"], p.get("type", "string")
+        val = given.get(name, p.get("default"))
+        if typ == "date":
+            val = _resolve_date(val)
+        if val in (None, ""):
+            if p.get("required"):
+                raise ValueError(f"缺少必填参数: {name}（{p.get('label', name)}）")
+            continue
+        if typ == "int":
+            try:
+                val = int(val)
+            except (TypeError, ValueError):
+                raise ValueError(f"参数 {name} 需为整数")
+        elif typ == "sids":
+            if isinstance(val, str):
+                val = [int(x) for x in val.replace("，", ",").split(",") if x.strip().isdigit()]
+            elif isinstance(val, list):
+                val = [int(x) for x in val]
+        out[name] = val
+    return out
+
+
+def _params_hash(dataset: str, params: Dict[str, Any]) -> str:
+    raw = dataset + "|" + json.dumps(params, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _cache_get(dataset: str, ph: str, ttl: int) -> Optional[Dict[str, Any]]:
+    try:
+        conn = _gw.connect()
+        try:
+            cur = conn.execute(
+                "SELECT payload_json, synced_at FROM lingxing_cache WHERE dataset=? AND params_hash=?",
+                (dataset, ph))
+            row = cur.fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+    if not row:
+        return None
+    payload_json, synced_at = row
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(synced_at)).total_seconds()
+    except Exception:
+        age = ttl + 1
+    if age > ttl:
+        return None
+    try:
+        return {"payload": json.loads(payload_json), "synced_at": synced_at}
+    except Exception:
+        return None
+
+
+def _cache_put(dataset: str, ph: str, params: Dict[str, Any], payload: Any) -> str:
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        conn = _gw.connect()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO lingxing_cache "
+                "(dataset, params_hash, params_json, payload_json, synced_at) VALUES (?,?,?,?,?)",
+                (dataset, ph, json.dumps(params, ensure_ascii=False, default=str),
+                 json.dumps(payload, ensure_ascii=False, default=str), ts))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return ts
+
+
+def _extract_rows(payload: Any) -> Any:
+    """Best-effort pull of the row list from a LingXing response envelope."""
+    if isinstance(payload, dict):
+        data = payload.get("data")
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for k in ("list", "records", "rows", "items"):
+                if isinstance(data.get(k), list):
+                    return data[k]
+            return data
+        return data
+    return payload
+
+
+async def fetch_dataset(dataset: str, params: Optional[Dict[str, Any]] = None, *,
+                        force: bool = False, ttl: Optional[int] = None,
+                        caller: str = "panel") -> Dict[str, Any]:
+    """Resolve params → serve fresh cache or call the gateway → cache → return.
+
+    Returns ``{dataset, rows, count, synced_at, cached, params}``.
+    """
+    spec = READ_DATASETS.get(dataset)
+    if not spec:
+        raise ValueError(f"未知数据集: {dataset}")
+    resolved = _coerce(spec.get("params", []), params or {})
+    ph = _params_hash(dataset, resolved)
+    ttl = _DEFAULT_TTL_S if ttl is None else ttl
+
+    if not force:
+        hit = _cache_get(dataset, ph, ttl)
+        if hit is not None:
+            rows = _extract_rows(hit["payload"])
+            return {"dataset": dataset, "rows": rows,
+                    "count": len(rows) if isinstance(rows, list) else None,
+                    "synced_at": hit["synced_at"], "cached": True, "params": resolved}
+
+    payload = await _gw.call_openapi_read(spec["route"], resolved,
+                                          method=spec["method"], caller=caller)
+    synced_at = _cache_put(dataset, ph, resolved, payload)
+    rows = _extract_rows(payload)
+    return {"dataset": dataset, "rows": rows,
+            "count": len(rows) if isinstance(rows, list) else None,
+            "synced_at": synced_at, "cached": False, "params": resolved}

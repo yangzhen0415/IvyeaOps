@@ -99,6 +99,11 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def connect() -> sqlite3.Connection:
+    """Public handle to the shared lingxing SQLite db (audit + cache + tickets)."""
+    return _connect()
+
+
 def init_db() -> None:
     conn = _connect()
     try:
@@ -120,6 +125,19 @@ def init_db() -> None:
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS ix_lingxing_audit_ts ON lingxing_audit(ts)"
+        )
+        # Local read cache / warehouse (regulates the rate limit, instant panels).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lingxing_cache (
+                dataset     TEXT NOT NULL,
+                params_hash TEXT NOT NULL,
+                params_json TEXT,
+                payload_json TEXT,
+                synced_at   TEXT,
+                PRIMARY KEY (dataset, params_hash)
+            )
+            """
         )
         conn.commit()
     finally:
