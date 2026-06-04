@@ -180,9 +180,9 @@ export default function LingXing() {
             </div>
           )
           : view === "dashboard" ? <LingXingDashboard storeSid={storeSid} /> : view === "optimizer" ? <LingXingOptimizer storeSid={storeSid} /> : view === "auto" ? <LingXingAutomation /> : view === "operate" ? <LingXingOperate /> : view === "audit" ? <LingXingAudit /> : (
-        <div style={{ display: "flex", gap: 12 }}>
+        <div className="lx-split">
           {/* dataset list */}
-          <div style={{ width: 180, flexShrink: 0 }}>
+          <div style={{ width: 180 }} className="lx-side">
             {Object.entries(groups).map(([g, items]) => (
               <div key={g} className="card" style={{ padding: 8, marginBottom: 8 }}>
                 <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>{g}</div>
@@ -198,7 +198,7 @@ export default function LingXing() {
           </div>
 
           {/* main */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="lx-main">
             <div className="card" style={{ padding: 12, marginBottom: 10 }}>
               {ds?.hint && <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 8 }}>{ds.hint}</div>}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>

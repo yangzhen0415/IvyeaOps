@@ -166,9 +166,9 @@ export default function LingXingOperate() {
         );
       })()}
 
-      <div style={{ display: "flex", gap: 12 }}>
+      <div className="lx-split">
         {/* tickets list */}
-        <div style={{ width: 230, flexShrink: 0 }} className="card">
+        <div style={{ width: 230 }} className="card lx-side">
           <div style={{ padding: "8px 10px", fontSize: 10, color: "var(--t3)", borderBottom: "1px solid var(--b)" }}>工单</div>
           {tickets.length === 0 && <div style={{ padding: 16, fontSize: 11, color: "var(--t3)" }}>暂无</div>}
           {tickets.map((t) => (
@@ -186,7 +186,7 @@ export default function LingXingOperate() {
         </div>
 
         {/* ticket detail */}
-        <div style={{ flex: 1, minWidth: 0 }} className="card">
+        <div className="card lx-main">
           {!sel ? <div style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>选择左侧工单</div> : (
             <div style={{ padding: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>

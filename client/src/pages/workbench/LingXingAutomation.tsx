@@ -91,9 +91,9 @@ export default function LingXingAutomation() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 12 }}>
+      <div className="lx-split">
         {/* runs list */}
-        <div style={{ width: 220, flexShrink: 0 }} className="card">
+        <div style={{ width: 220 }} className="card lx-side">
           <div style={{ padding: "8px 10px", fontSize: 10, color: "var(--t3)", borderBottom: "1px solid var(--b)" }}>运行记录</div>
           {runs.length === 0 && <div style={{ padding: 16, fontSize: 11, color: "var(--t3)" }}>暂无</div>}
           {runs.map((r) => (
@@ -112,7 +112,7 @@ export default function LingXingAutomation() {
         </div>
 
         {/* run detail */}
-        <div style={{ flex: 1, minWidth: 0 }} className="card">
+        <div className="card lx-main">
           {!sel ? (
             <div style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>选择左侧运行记录查看建议</div>
           ) : (
