@@ -103,6 +103,14 @@ export default function LingXing() {
     <div>
       <div className="ptitle">/ 领星 ERP</div>
 
+      {/* boot error / loading — never leave the page a dead end */}
+      {!status && (
+        <div className="card" style={{ padding: 12, marginBottom: 10, fontSize: 11, display: "flex", gap: 10, alignItems: "center", color: err ? "var(--red)" : "var(--t3)" }}>
+          {err ? <>加载领星状态失败：{err}（后端可能未重启，新接口未生效）</> : "加载中…"}
+          <span style={{ marginLeft: "auto" }}><Btn onClick={boot}>重试</Btn></span>
+        </div>
+      )}
+
       {/* status bar */}
       <div className="card" style={{ padding: "8px 12px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <Chip on={!!status?.openapi_configured} label={status?.openapi_configured ? "OpenAPI 已配置" : "未配置凭证"} />
