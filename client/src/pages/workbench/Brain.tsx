@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
+import BrainMarkdown from "./BrainMarkdown";
+import SheetSelect from "../../components/SheetSelect";
 import {
   brainChatCreate,
   brainChatGet,
-  brainChatSend,
+  brainChatSendStream,
+  brainChatDeleteMessage,
   brainChatSessions,
   brainChatStatus,
   brainChatUpdate,
@@ -40,6 +43,27 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "templates", label: "亚马逊模板" },
   { key: "overview", label: "概览" },
   { key: "settings", label: "设置" },
+];
+
+// 检索范围（GBrain 知识分类，对应后端 ALLOWED_CATEGORIES）
+const SCOPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "全部知识" },
+  { value: "amazon", label: "Amazon 运营" },
+  { value: "products", label: "产品" },
+  { value: "market", label: "市场" },
+  { value: "ads", label: "广告" },
+  { value: "compliance", label: "合规" },
+  { value: "suppliers", label: "供应商" },
+  { value: "inbox", label: "收件箱" },
+];
+
+// 空状态的 Amazon 运营快捷提问（点击直接发送，先检索知识库再让 Hermes 作答）
+const QUICK_PROMPTS: string[] = [
+  "这个产品广告应该怎么打？给出精准/词组/广泛和否词的初始结构。",
+  "帮我梳理这个 Listing 的 CTR/CVR 优化点（主图、标题、五点、A+）。",
+  "围绕核心词给一份长尾词与关键词布局策略。",
+  "售后/差评场景下，有哪些合规话术和风险规避要点？",
+  "根据知识库里的供应商/采购信息，整理一份比价与跟进清单。",
 ];
 
 const CATEGORIES = [
@@ -121,6 +145,12 @@ export default function Brain() {
   const [messages, setMessages] = useState<BrainChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [savingKb, setSavingKb] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [sessionFilter, setSessionFilter] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [chatScope, setChatScope] = useState("");
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 760);
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
 
@@ -350,25 +380,129 @@ export default function Brain() {
     }
   };
 
-  const sendChat = async () => {
-    const text = chatInput.trim();
-    if (!text || !activeSession) return;
+  const runStream = async (sessionId: string, body: { content?: string; regenerate?: boolean; category?: string }, tmpAsst: string, tmpUser?: string) => {
+    await brainChatSendStream(sessionId, body, (evt) => {
+      if (evt.type === "start") {
+        setMessages((prev) => prev.map((m) => {
+          if (tmpUser && m.id === tmpUser && evt.user_message) return evt.user_message;
+          if (m.id === tmpAsst) return { ...m, citations: evt.citations || [] };
+          return m;
+        }));
+      } else if (evt.type === "token") {
+        setMessages((prev) => prev.map((m) => (m.id === tmpAsst ? { ...m, content: m.content + evt.text } : m)));
+      } else if (evt.type === "done") {
+        setMessages((prev) => prev.map((m) => (m.id === tmpAsst ? evt.assistant_message : m)));
+      } else if (evt.type === "error") {
+        throw new Error(evt.detail);
+      }
+    });
+  };
+
+  const sendChat = async (override?: string) => {
+    const text = (override ?? chatInput).trim();
+    if (!text || !activeSession || sending) return;
+    const sid = activeSession.id;
     setSending(true);
     setErr(null);
     setChatInput("");
-    const optimistic: BrainChatMessage = { id: `local-${Date.now()}`, session_id: activeSession.id, role: "user", content: text, citations: [], created_at: new Date().toISOString() };
-    setMessages((prev) => [...prev, optimistic]);
+    const tmpUser = `local-u-${Date.now()}`;
+    const tmpAsst = `local-a-${Date.now()}`;
+    const now = new Date().toISOString();
+    setMessages((prev) => [
+      ...prev,
+      { id: tmpUser, session_id: sid, role: "user", content: text, citations: [], created_at: now },
+      { id: tmpAsst, session_id: sid, role: "assistant", content: "", citations: [], created_at: now },
+    ]);
     try {
-      const r = await brainChatSend(activeSession.id, text);
-      setMessages((prev) => [...prev.filter((m) => m.id !== optimistic.id), r.user_message, r.assistant_message]);
+      await runStream(sid, { content: text, category: chatScope || undefined }, tmpAsst, tmpUser);
       const list = await brainChatSessions();
       setSessions(list.sessions);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "发送失败");
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setErr(e?.message ?? "发送失败");
+      setMessages((prev) => prev.filter((m) => m.id !== tmpAsst && m.id !== tmpUser));
       setChatInput(text);
     } finally {
       setSending(false);
+    }
+  };
+
+  const regenerate = async () => {
+    if (!activeSession || sending) return;
+    const sid = activeSession.id;
+    const lastAsst = [...messages].reverse().find((m) => m.role === "assistant" && !m.id.startsWith("local-"));
+    if (!lastAsst) return;
+    setSending(true);
+    setErr(null);
+    const tmpAsst = `local-a-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev.filter((m) => m.id !== lastAsst.id),
+      { id: tmpAsst, session_id: sid, role: "assistant", content: "", citations: lastAsst.citations, created_at: new Date().toISOString() },
+    ]);
+    try {
+      await runStream(sid, { regenerate: true, category: chatScope || undefined }, tmpAsst);
+    } catch (e: any) {
+      setErr(e?.message ?? "重新生成失败");
+      try { await loadSession(sid); } catch { /* keep error */ }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const deleteMessage = async (m: BrainChatMessage) => {
+    if (m.id.startsWith("local-")) return;
+    const ok = await confirm({ title: "删除该消息", message: "删除后无法恢复。", confirmText: "删除", danger: true });
+    if (!ok) return;
+    try {
+      await brainChatDeleteMessage(m.id);
+      setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? e.message ?? "删除失败");
+    }
+  };
+
+  const copyMessage = (m: BrainChatMessage) => {
+    navigator.clipboard?.writeText(m.content).then(() => {
+      setCopiedId(m.id);
+      setTimeout(() => setCopiedId((id) => (id === m.id ? null : id)), 1500);
+    });
+  };
+
+  const beginRename = (s: BrainChatSession) => {
+    setRenamingId(s.id);
+    setRenameValue(s.title || "");
+  };
+
+  const commitRename = async (sessionId: string) => {
+    const title = renameValue.trim();
+    setRenamingId(null);
+    const current = sessions.find((s) => s.id === sessionId);
+    if (!title || title === (current?.title || "")) return;
+    try {
+      await brainChatUpdate(sessionId, { title });
+      setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title } : s)));
+      if (activeSession?.id === sessionId) setActiveSession((a) => (a ? { ...a, title } : a));
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? e.message ?? "重命名失败");
+    }
+  };
+
+  const quickAsk = (text: string) => {
+    if (sending || !activeSession) return;
+    void sendChat(text);
+  };
+
+  const saveAsKnowledge = async (m: BrainChatMessage) => {
+    if (savingKb) return;
+    setSavingKb(m.id);
+    setErr(null);
+    try {
+      const r = await brainIngestText(m.content, true);
+      setFlash(`已存入知识库：${r.saved_path || "已保存"}`);
+      await Promise.all([loadFiles(), loadOverview()]);
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? e.message ?? "存入知识库失败");
+    } finally {
+      setSavingKb(null);
     }
   };
 
@@ -499,16 +633,36 @@ export default function Brain() {
             {/* Sessions panel — desktop only */}
             {!isMobile && (
               <div className="card" style={{ overflow: "auto" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                   <div className="ct" style={{ margin: 0, flex: 1 }}>SESSIONS</div>
                   <button className="tbtn" onClick={newChat} disabled={sending}>新建</button>
                 </div>
+                <input className="inp" value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} placeholder="搜索会话..." style={{ marginBottom: 8, padding: "4px 8px", fontSize: 10 }} />
                 <div style={{ display: "grid", gap: 4 }}>
-                  {sessions.map((s) => (
-                    <button key={s.id} className="tbtn" onClick={() => loadSession(s.id)} style={{ textAlign: "left", borderColor: s.id === activeSession?.id ? "var(--acc)" : "var(--b)", color: s.id === activeSession?.id ? "var(--acc)" : "var(--t2)", padding: "5px 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10 }}>
-                      {s.title || "新对话"}
-                    </button>
+                  {sessions.filter((s) => !sessionFilter.trim() || (s.title || "新对话").toLowerCase().includes(sessionFilter.trim().toLowerCase())).map((s) => (
+                    renamingId === s.id ? (
+                      <input
+                        key={s.id}
+                        className="inp"
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => commitRename(s.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(s.id); } else if (e.key === "Escape") { setRenamingId(null); } }}
+                        style={{ padding: "4px 7px", fontSize: 10, borderColor: "var(--acc)" }}
+                      />
+                    ) : (
+                      <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 2, border: "1px solid " + (s.id === activeSession?.id ? "var(--acc)" : "var(--b)"), borderRadius: 5, overflow: "hidden" }}>
+                        <button className="tbtn" onClick={() => loadSession(s.id)} title={s.title || "新对话"} style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", color: s.id === activeSession?.id ? "var(--acc)" : "var(--t2)", padding: "5px 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10 }}>
+                          {s.title || "新对话"}
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); beginRename(s); }} title="重命名" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 11, padding: "2px 6px", flexShrink: 0 }}>✎</button>
+                      </div>
+                    )
                   ))}
+                  {sessions.length > 0 && sessions.filter((s) => !sessionFilter.trim() || (s.title || "新对话").toLowerCase().includes(sessionFilter.trim().toLowerCase())).length === 0 && (
+                    <div style={{ color: "var(--t3)", fontSize: 10, padding: "4px 2px" }}>无匹配会话</div>
+                  )}
                 </div>
               </div>
             )}
@@ -523,24 +677,56 @@ export default function Brain() {
                 {activeSession && <button className="tbtn" onClick={() => archiveChat(activeSession.id)}>归档</button>}
               </div>
               <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12, display: "grid", gap: 10, alignContent: "start" }}>
-                {!messages.length && <div style={{ color: "var(--t3)", fontSize: 12 }}>直接提问，例如：「这个产品广告应该怎么打？」系统会先检索知识库，再调用本机 Hermes 生成回答，并在消息下方显示引用来源。</div>}
-                {messages.map((m) => (
-                  <div key={m.id} style={{ justifySelf: m.role === "user" ? "end" : "start", maxWidth: "88%" }}>
-                    <div style={{ border: "1px solid var(--b)", background: m.role === "user" ? "rgba(47,129,247,.13)" : "rgba(255,255,255,.03)", color: "var(--t)", padding: "9px 11px", borderRadius: 8, whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.65 }}>{m.content}</div>
+                {!messages.length && (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <div style={{ color: "var(--t3)", fontSize: 12 }}>直接提问，系统会先检索知识库，再调用本机 Hermes 生成回答，并在消息下方显示引用来源。或从下面的常用问题开始：</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {QUICK_PROMPTS.map((p, i) => (
+                        <button key={i} className="tbtn" onClick={() => quickAsk(p)} disabled={sending} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, maxWidth: 360, whiteSpace: "normal", lineHeight: 1.5 }}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(() => {
+                  const lastAssistantId = [...messages].reverse().find((x) => x.role === "assistant" && !x.id.startsWith("local-"))?.id;
+                  return messages.map((m) => (
+                  <div key={m.id} style={{ justifySelf: m.role === "user" ? "end" : "start", maxWidth: m.role === "user" ? "88%" : "94%" }}>
+                    <div style={{ border: "1px solid var(--b)", background: m.role === "user" ? "rgba(47,129,247,.13)" : "rgba(255,255,255,.03)", color: "var(--t)", padding: "9px 11px", borderRadius: 8, fontSize: 12, lineHeight: 1.65 }}>
+                      {m.role === "assistant"
+                        ? (m.content ? <BrainMarkdown>{m.content}</BrainMarkdown> : <span style={{ color: "var(--t3)" }}>{sending ? "生成中…" : "（空回答）"}</span>)
+                        : <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>}
+                    </div>
                     {m.role === "assistant" && m.citations?.length > 0 && (
-                      <details style={{ marginTop: 6, color: "var(--t3)", fontSize: 10 }}>
-                        <summary>引用来源 {m.citations.length}</summary>
-                        <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
-                          {m.citations.map((c, i) => <button key={`${c.slug}-${i}`} className="tbtn" onClick={() => openSlug(c.slug)} style={{ textAlign: "left" }}>{c.slug}<br /><span style={{ color: "var(--t3)" }}>{c.snippet?.slice(0, 160)}</span></button>)}
-                        </div>
-                      </details>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6, alignItems: "center" }}>
+                        <span style={{ color: "var(--t3)", fontSize: 10 }}>来源</span>
+                        {m.citations.map((c, i) => (
+                          <button key={`${c.slug}-${i}`} className="tbtn" onClick={() => c.slug && openSlug(c.slug)} title={c.snippet?.slice(0, 200)} style={{ padding: "1px 7px", fontSize: 10, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {c.slug || c.snippet?.slice(0, 24) || "片段"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {m.role === "assistant" && !m.id.startsWith("local-") && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
+                        <button className="tbtn" onClick={() => copyMessage(m)} style={{ padding: "1px 8px", fontSize: 10 }}>{copiedId === m.id ? "已复制" : "复制"}</button>
+                        <button className="tbtn" onClick={() => saveAsKnowledge(m)} disabled={savingKb === m.id} style={{ padding: "1px 8px", fontSize: 10 }}>{savingKb === m.id ? "存入中..." : "存为知识"}</button>
+                        {m.id === lastAssistantId && <button className="tbtn" onClick={regenerate} disabled={sending} style={{ padding: "1px 8px", fontSize: 10 }}>重新生成</button>}
+                        <button className="tbtn" onClick={() => deleteMessage(m)} style={{ padding: "1px 8px", fontSize: 10, color: "var(--red)" }}>删除</button>
+                      </div>
                     )}
                   </div>
-                ))}
+                  ));
+                })()}
               </div>
-              <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid var(--b)", flexShrink: 0 }}>
-                <textarea className="inp" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendChat(); }} placeholder="输入问题，Ctrl/⌘ + Enter 发送" style={{ minHeight: 54, maxHeight: 140, flex: 1, resize: "vertical" }} />
-                <button className="tbtn" onClick={sendChat} disabled={sending || !chatInput.trim()}>{sending ? "发送中..." : "发送"}</button>
+              <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid var(--b)", flexShrink: 0, alignItems: "stretch" }}>
+                <textarea className="inp" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendChat(); } }} placeholder="输入问题，Enter 发送（Shift+Enter 换行）" style={{ minHeight: 54, maxHeight: 140, flex: 1, resize: "vertical" }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <SheetSelect className="inp" value={chatScope} onChange={setChatScope} title="限定检索范围" style={{ padding: "4px 6px", fontSize: 10 }}
+                    options={SCOPE_OPTIONS} />
+                  <button className="tbtn" onClick={() => sendChat()} disabled={sending || !chatInput.trim()} style={{ flex: 1 }}>{sending ? "发送中..." : "发送"}</button>
+                </div>
               </div>
             </div>
           </div>
@@ -575,9 +761,8 @@ export default function Brain() {
               <div style={{ display: "grid", gap: 10 }}>
                 <input className="inp" type="file" accept=".md,.txt,.csv,.json,.xlsx,.pdf" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
                 <input className="inp" value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="标题，可留空使用文件名" />
-                <select className="inp" value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}>
-                  {CATEGORIES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <SheetSelect className="inp" value={uploadCategory} onChange={setUploadCategory} title="选择分类"
+                  options={CATEGORIES.map(([k, v]) => ({ value: k, label: v }))} />
                 <MiniAlert kind="info">支持 md/txt/csv/json/xlsx/pdf，单文件 10MB。上传后会转为 Markdown 并导入 GBrain。</MiniAlert>
                 <button className="tbtn" onClick={doUpload} disabled={saving}>{saving ? "上传导入中..." : "上传并导入"}</button>
               </div>
@@ -634,7 +819,8 @@ export default function Brain() {
         <div>
           <div className="card" style={{ marginBottom: 10 }}><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input className="inp" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doSearch()} placeholder="搜索运营知识、ASIN 笔记、广告策略..." style={{ flex: 1, minWidth: 220 }} />
-            <select className="inp" value={mode} onChange={(e) => setMode(e.target.value as "search" | "query")} style={{ width: 120 }}><option value="search">search</option><option value="query">query</option></select>
+            <SheetSelect className="inp" value={mode} onChange={(v) => setMode(v as "search" | "query")} style={{ width: 120 }} title="检索模式"
+              options={[{ value: "search", label: "search" }, { value: "query", label: "query" }]} />
             <button className="tbtn" onClick={doSearch} disabled={loading}>{loading ? "搜索中..." : "搜索"}</button>
           </div></div>
           <div style={{ display: "grid", gap: 10 }}>

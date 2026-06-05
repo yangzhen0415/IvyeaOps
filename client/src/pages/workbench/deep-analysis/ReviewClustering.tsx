@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { streamReviews, type SseEvent } from "../../../api/deepAnalysis";
+import AnalysisSkeleton from "./AnalysisSkeleton";
+import SheetSelect from "../../../components/SheetSelect";
+import { marketplaceOptions } from "../../../lib/marketplaces";
 
 const MARKETPLACES = ["US", "UK", "DE", "CA", "JP"];
 
@@ -54,9 +57,8 @@ export default function ReviewClustering() {
           placeholder="输入 ASIN"
           disabled={loading}
         />
-        <select className="market-query-input" style={{ flex: "1 1 80px", minWidth: 0 }} value={country} onChange={(e) => setCountry(e.target.value)}>
-          {MARKETPLACES.map((m) => <option key={m}>{m}</option>)}
-        </select>
+        <SheetSelect className="market-query-input" style={{ flex: "1 1 80px", minWidth: 0 }} value={country} onChange={setCountry}
+          flags title="选择国家" options={marketplaceOptions(MARKETPLACES)} />
         <button className="market-btn market-btn-submit" onClick={run} disabled={loading || !asin.trim()}>
           {loading ? "分析中…" : "开始分析"}
         </button>
@@ -68,14 +70,10 @@ export default function ReviewClustering() {
       </div>
 
       {error && <div className="market-error" style={{ marginTop: 10 }}>{error}</div>}
-      {loading && !output && (
-        <div className="pulse-loading" style={{ marginTop: 10 }}>
-          <span className="pulse-spin">◌</span> 正在采集评论并聚类分析（约 1-2 分钟）…
-        </div>
-      )}
+      {loading && !output && <AnalysisSkeleton label="正在采集评论并聚类分析（约 1-2 分钟）…" sections={4} />}
 
       {output && (
-        <div style={{ marginTop: 14 }}>
+        <div className="wb-enter" style={{ marginTop: 14 }}>
           {provider && <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 4 }}>via {provider}</div>}
           <div
             className="card"

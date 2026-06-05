@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { trafficDiagnosis } from "../../../api/deepAnalysis";
+import AnalysisSkeleton from "./AnalysisSkeleton";
+import SheetSelect from "../../../components/SheetSelect";
+import { marketplaceOptions } from "../../../lib/marketplaces";
 
 const MARKETPLACES = ["US", "UK", "DE", "CA", "JP", "FR", "ES", "IT", "MX", "AU"];
 
@@ -38,19 +41,18 @@ export default function TrafficDiagnosis() {
           placeholder="输入 ASIN，如 B0XXXXXXXX"
           disabled={loading}
         />
-        <select className="market-query-input" style={{ flex: "1 1 80px", minWidth: 0 }} value={country} onChange={(e) => setCountry(e.target.value)}>
-          {MARKETPLACES.map((m) => <option key={m}>{m}</option>)}
-        </select>
+        <SheetSelect className="market-query-input" style={{ flex: "1 1 80px", minWidth: 0 }} value={country} onChange={setCountry}
+          flags title="选择国家" options={marketplaceOptions(MARKETPLACES)} />
         <button className="market-btn market-btn-submit" onClick={run} disabled={loading || !asin.trim()}>
           {loading ? "诊断中…" : "开始诊断"}
         </button>
       </div>
 
       {error && <div className="market-error" style={{ marginTop: 10 }}>{error}</div>}
-      {loading && <div className="pulse-loading" style={{ marginTop: 10 }}><span className="pulse-spin">◌</span> 正在分析流量数据…</div>}
+      {loading && <AnalysisSkeleton label="正在分析流量数据…" />}
 
       {result && (
-        <div style={{ marginTop: 14 }}>
+        <div className="wb-enter" style={{ marginTop: 14 }}>
           <div className="card" style={{ background: "var(--bg2)" }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
               「{asin}」流量诊断报告

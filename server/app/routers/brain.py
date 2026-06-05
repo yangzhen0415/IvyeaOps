@@ -1,9 +1,14 @@
 """GBrain web API for the IvyeaOps knowledge base UI."""
 from __future__ import annotations
 
+import asyncio
+import codecs
+import json
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.security import require_user
@@ -40,6 +45,12 @@ class ChatSessionUpdateBody(BaseModel):
 
 class ChatMessageBody(BaseModel):
     content: str = Field(..., min_length=1, max_length=bc.MAX_CHAT_CHARS)
+
+
+class ChatStreamBody(BaseModel):
+    content: str = Field("", max_length=bc.MAX_CHAT_CHARS)
+    regenerate: bool = False
+    category: str | None = Field(None, max_length=40)
 
 
 class IngestTextBody(BaseModel):
@@ -258,3 +269,108 @@ def chat_session_update(session_id: str, body: ChatSessionUpdateBody) -> dict[st
 @router.post("/chat/sessions/{session_id}/messages")
 def chat_message_send(session_id: str, body: ChatMessageBody) -> dict[str, Any]:
     return _handle(bc.send_message, session_id, body.content)
+
+
+def _sse(evt: dict[str, Any]) -> str:
+    return f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+
+_STREAM_DEADLINE_S = int(__import__("os").environ.get("BRAIN_CHAT_HERMES_TIMEOUT", "180"))
+
+
+@router.post("/chat/sessions/{session_id}/messages/stream")
+async def chat_message_stream(session_id: str, body: ChatStreamBody):
+    """Stream a hermes answer token-by-token over SSE. Emits:
+    start{user_message,citations} → token{text}* → done{assistant_message} | error{detail}."""
+
+    async def gen():
+        try:
+            turn = bc.begin_chat_turn(session_id, body.content, regenerate=body.regenerate, category=body.category)
+        except (gb.GBrainError, bc.BrainChatError) as e:
+            yield _sse({"type": "error", "detail": str(e)})
+            return
+        except Exception as e:  # noqa: BLE001
+            yield _sse({"type": "error", "detail": f"准备对话失败：{e}"})
+            return
+
+        yield _sse({
+            "type": "start",
+            "user_message": turn["user_message"],
+            "citations": turn["citations"],
+            "regenerated": turn.get("regenerated", False),
+        })
+
+        spec = bc.stream_spec(turn["prompt"])
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *spec["argv"],
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                cwd=spec["cwd"],
+                env=spec["env"],
+            )
+        except Exception as e:  # noqa: BLE001
+            yield _sse({"type": "error", "detail": f"启动 Hermes 失败：{e}"})
+            return
+
+        try:
+            proc.stdin.write(spec["stdin"])
+            await proc.stdin.drain()
+            proc.stdin.close()
+        except Exception:
+            pass
+
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        deadline = time.monotonic() + _STREAM_DEADLINE_S
+        parts: list[str] = []
+        timed_out = False
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    timed_out = True
+                    break
+                try:
+                    data = await asyncio.wait_for(proc.stdout.read(1024), timeout=min(remaining, 15))
+                except asyncio.TimeoutError:
+                    yield ":hb\n\n"  # heartbeat keeps proxies from closing the stream
+                    continue
+                if not data:
+                    break
+                text = decoder.decode(data)
+                if text:
+                    parts.append(text)
+                    yield _sse({"type": "token", "text": text})
+        finally:
+            if proc.returncode is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            try:
+                await proc.wait()
+            except Exception:
+                pass
+
+        answer = "".join(parts)
+        if timed_out and not answer.strip():
+            yield _sse({"type": "error", "detail": "Hermes 对话超时，请稍后重试或缩短问题。"})
+            return
+        try:
+            assistant = bc.commit_chat_answer(session_id, answer, turn["citations"])
+        except (gb.GBrainError, bc.BrainChatError) as e:
+            yield _sse({"type": "error", "detail": str(e)})
+            return
+        yield _sse({"type": "done", "assistant_message": assistant, "truncated": timed_out})
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+@router.delete("/chat/messages/{message_id}")
+def chat_message_delete(message_id: str) -> dict[str, Any]:
+    return _handle(bc.delete_message, message_id)

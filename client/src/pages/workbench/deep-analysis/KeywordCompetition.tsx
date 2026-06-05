@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { keywordCompetition } from "../../../api/deepAnalysis";
+import AnalysisSkeleton from "./AnalysisSkeleton";
+import SheetSelect from "../../../components/SheetSelect";
+import { marketplaceOptions } from "../../../lib/marketplaces";
 
 const MARKETPLACES = ["US", "UK", "DE", "CA", "JP", "FR", "ES", "IT", "MX", "AU"];
 
@@ -39,26 +42,25 @@ export default function KeywordCompetition() {
           placeholder="输入关键词，如: trail camera"
           disabled={loading}
         />
-        <select
+        <SheetSelect
           className="market-query-input"
           style={{ flex: "1 1 80px", minWidth: 0 }}
           value={country}
-          onChange={(e) => setCountry(e.target.value)}
-        >
-          {MARKETPLACES.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
+          onChange={setCountry}
+          flags
+          title="选择国家"
+          options={marketplaceOptions(MARKETPLACES)}
+        />
         <button className="market-btn market-btn-submit" onClick={run} disabled={loading || !keyword.trim()}>
           {loading ? "分析中…" : "开始分析"}
         </button>
       </div>
 
       {error && <div className="market-error" style={{ marginTop: 10 }}>{error}</div>}
-      {loading && <div className="pulse-loading" style={{ marginTop: 10 }}><span className="pulse-spin">◌</span> 正在分析关键词数据…</div>}
+      {loading && <AnalysisSkeleton label="正在分析关键词数据…" />}
 
       {result && (
-        <div style={{ marginTop: 14 }}>
+        <div className="wb-enter" style={{ marginTop: 14 }}>
           <ResultDisplay data={result} keyword={keyword} />
         </div>
       )}

@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { streamListingRewrite, type SseEvent } from "../../../api/deepAnalysis";
+import AnalysisSkeleton from "./AnalysisSkeleton";
+import SheetSelect from "../../../components/SheetSelect";
+import { marketplaceOptions } from "../../../lib/marketplaces";
 
 const MARKETPLACES = ["US", "UK", "DE", "CA", "JP"];
 const FIELD_OPTIONS = [
@@ -72,14 +75,14 @@ export default function ListingRewrite() {
           style={{ flex: "1 1 240px", resize: "vertical", fontFamily: "inherit" }}
         />
         <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "0 0 auto" }}>
-          <select className="market-query-input" style={{ width: 100 }} value={marketplace} onChange={(e) => setMarketplace(e.target.value)}>
-            {MARKETPLACES.map((m) => <option key={m}>{m}</option>)}
-          </select>
-          <select className="market-query-input" style={{ width: 100 }} value={style} onChange={(e) => setStyle(e.target.value)}>
-            <option value="professional">专业</option>
-            <option value="casual">轻松</option>
-            <option value="luxury">奢华</option>
-          </select>
+          <SheetSelect className="market-query-input" style={{ width: 100 }} value={marketplace} onChange={setMarketplace}
+            flags title="选择站点" options={marketplaceOptions(MARKETPLACES)} />
+          <SheetSelect className="market-query-input" style={{ width: 100 }} value={style} onChange={setStyle}
+            title="选择风格" options={[
+              { value: "professional", label: "专业" },
+              { value: "casual", label: "轻松" },
+              { value: "luxury", label: "奢华" },
+            ]} />
         </div>
       </div>
 
@@ -112,14 +115,10 @@ export default function ListingRewrite() {
       </div>
 
       {error && <div className="market-error" style={{ marginTop: 10 }}>{error}</div>}
-      {loading && !output && (
-        <div className="pulse-loading" style={{ marginTop: 10 }}>
-          <span className="pulse-spin">◌</span> 正在改写 Listing（约 1-2 分钟）…
-        </div>
-      )}
+      {loading && !output && <AnalysisSkeleton label="正在改写 Listing（约 1-2 分钟）…" sections={4} />}
 
       {output && (
-        <div style={{ marginTop: 14 }}>
+        <div className="wb-enter" style={{ marginTop: 14 }}>
           {provider && <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 4 }}>via {provider}</div>}
           <div
             className="card"

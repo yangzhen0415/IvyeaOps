@@ -776,7 +776,7 @@ def _build_prompt(user_message: str, citations: list[dict[str, Any]], mode: str)
     return [{"role": "system", "content": system}, {"role": "user", "content": user_message}]
 
 
-def _search_citations(user_message: str) -> list[dict[str, Any]]:
+def _search_citations(user_message: str, category: str | None = None) -> list[dict[str, Any]]:
     def add_candidate(value: str, out: list[str]) -> None:
         v = value.strip()
         if v and v not in out:
@@ -802,6 +802,7 @@ def _search_citations(user_message: str) -> list[dict[str, Any]]:
     if ascii_terms:
         add_candidate(" ".join(ascii_terms[:8]), candidates)
 
+    scope = (category or "").strip().lower()
     seen: set[str] = set()
     citations: list[dict[str, Any]] = []
     last_error: Exception | None = None
@@ -812,6 +813,9 @@ def _search_citations(user_message: str) -> list[dict[str, Any]]:
             last_error = e
             continue
         for item in search_result.get("items", [])[:8]:
+            # Scope retrieval to a single knowledge category when requested.
+            if scope and str(item.get("category") or "").strip().lower() != scope:
+                continue
             key = str(item.get("slug") or item.get("path") or item.get("snippet") or "")
             if key and key not in seen:
                 seen.add(key)
@@ -842,3 +846,89 @@ def send_message(session_id: str, content: str) -> dict[str, Any]:
     with _connect() as conn:
         assistant_msg = _insert_message(conn, session_id, "assistant", answer, citations)
     return {"user_message": user_msg, "assistant_message": assistant_msg, "citations": citations, "model": chat_model_status()}
+
+
+# ── Streaming chat (SSE) ────────────────────────────────────────────────────
+_BRAIN_STREAM_WRAPPER = str(Path(__file__).parent / "brain_stream_wrapper.py")
+_HERMES_VENV_PYTHON = str(Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin" / "python")
+
+
+def _row_to_message(row: sqlite3.Row) -> dict[str, Any]:
+    try:
+        citations = json.loads(row["citations_json"] or "[]")
+    except Exception:
+        citations = []
+    return {
+        "id": row["id"], "session_id": row["session_id"], "role": row["role"],
+        "content": row["content"], "citations": citations, "created_at": row["created_at"],
+    }
+
+
+def begin_chat_turn(session_id: str, content: str, regenerate: bool = False, category: str | None = None) -> dict[str, Any]:
+    """Prepare a streaming turn: persist the user message (or, for regenerate,
+    reuse the last user question and drop the stale answer), retrieve citations
+    (optionally scoped to a knowledge category), and build the hermes prompt.
+    Returns {user_message, prompt, citations}."""
+    init_db()
+    current = get_session(session_id)["session"]
+    user_msg: dict[str, Any] | None = None
+
+    if regenerate:
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM brain_chat_messages WHERE session_id = ? ORDER BY created_at ASC, rowid ASC",
+                (session_id,),
+            ).fetchall()
+        if not rows:
+            raise BrainChatError("没有可重新生成的消息")
+        last_user_idx = next((i for i in range(len(rows) - 1, -1, -1) if rows[i]["role"] == "user"), None)
+        if last_user_idx is None:
+            raise BrainChatError("没有找到可重新生成的用户问题")
+        msg = (rows[last_user_idx]["content"] or "").strip()
+        user_msg = _row_to_message(rows[last_user_idx])
+        stale_ids = [rows[j]["id"] for j in range(last_user_idx + 1, len(rows)) if rows[j]["role"] == "assistant"]
+        if stale_ids:
+            with _connect() as conn:
+                conn.executemany("DELETE FROM brain_chat_messages WHERE id = ?", [(i,) for i in stale_ids])
+    else:
+        msg = (content or "").strip()
+        if not msg:
+            raise BrainChatError("消息不能为空")
+        if len(msg) > MAX_CHAT_CHARS:
+            raise BrainChatError(f"消息过长，最多 {MAX_CHAT_CHARS} 字符")
+        with _connect() as conn:
+            user_msg = _insert_message(conn, session_id, "user", msg, [])
+            if current.get("title") in ("新知识对话", "新对话", None, ""):
+                auto_title = msg.replace("\n", " ").strip()[:40] or "对话"
+                conn.execute("UPDATE brain_chat_sessions SET title = ? WHERE id = ?", (auto_title, session_id))
+
+    citations = _search_citations(msg, category)
+    prompt = _messages_to_hermes_prompt(_build_prompt(msg, citations, str(current.get("mode") or "knowledge")))
+    return {"user_message": user_msg, "prompt": prompt, "citations": citations, "regenerated": regenerate}
+
+
+def commit_chat_answer(session_id: str, answer: str, citations: list[dict[str, Any]]) -> dict[str, Any]:
+    """Persist the streamed assistant answer once generation finishes."""
+    clean = _strip_hermes_output(answer) if answer.strip() else ""
+    if not clean:
+        raise BrainChatError("Hermes 返回了空响应。")
+    with _connect() as conn:
+        return _insert_message(conn, session_id, "assistant", clean, citations)
+
+
+def delete_message(message_id: str) -> dict[str, Any]:
+    """Delete a single chat message (user or assistant)."""
+    init_db()
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM brain_chat_messages WHERE id = ?", (message_id,))
+    return {"deleted": (cur.rowcount or 0) > 0, "id": message_id}
+
+
+def stream_spec(prompt: str) -> dict[str, Any]:
+    """Subprocess spec for the no-tools streaming wrapper (used by the SSE route)."""
+    return {
+        "argv": [_HERMES_VENV_PYTHON, _BRAIN_STREAM_WRAPPER],
+        "stdin": prompt.encode("utf-8"),
+        "env": _hermes_env(),
+        "cwd": str(gb.BRAIN_ROOT),
+    }
