@@ -2516,3 +2516,10 @@ body::after{
   .xsel-sheet-row-check{margin-left:auto;color:var(--acc);font-weight:700}
   .xsel-sheet-cell:disabled,.xsel-sheet-row:disabled{opacity:.4;cursor:not-allowed}
 }
+
+/* 帮助文档 Markdown：修复有序/无序列表序号跑出左边框、紧凑段距 */
+.lx-help ul,.lx-help ol{padding-left:1.6em;margin:6px 0}
+.lx-help li{margin:3px 0}
+.lx-help li::marker{color:var(--t3)}
+.lx-help p{margin:8px 0}
+.lx-help li>p{margin:2px 0}

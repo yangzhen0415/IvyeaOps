@@ -9,7 +9,7 @@ export default function LingXingHelp() {
     api.get("/lingxing/help").then((r) => setMd(r.data.markdown || "")).catch(() => setMd("# 文档加载失败"));
   }, []);
   return (
-    <div className="card" style={{ padding: "16px 22px", maxWidth: 920, lineHeight: 1.7, fontSize: 13, color: "var(--t2)" }}>
+    <div className="card" style={{ padding: "16px 22px", lineHeight: 1.7, fontSize: 13, color: "var(--t2)" }}>
       <div className="lx-help">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
           h1: (p) => <h1 style={{ fontSize: 20, color: "var(--t)", margin: "4px 0 10px" }} {...p} />,
