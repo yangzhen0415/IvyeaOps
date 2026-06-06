@@ -15,6 +15,8 @@ when the trail is already too big to fit in the agent's context window.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import os
 import shutil
 import subprocess
@@ -160,6 +162,7 @@ def _call_summary_model(messages: list[dict[str, str]]) -> tuple[str, int]:
             text=True,
             capture_output=True,
             timeout=180,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as e:
         raise CompactorError("压缩请求超时") from e

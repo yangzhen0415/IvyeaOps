@@ -1,6 +1,8 @@
 """Knowledge upload and persistent chat service for the GBrain UI."""
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import csv
 import io
 import json
@@ -303,6 +305,7 @@ def _call_hermes_json(prompt: str, timeout: int = 90) -> dict[str, Any] | None:
         text=True,
         capture_output=True,
         timeout=timeout,
+        **no_window_kwargs(),
     )
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()[-800:]
@@ -741,6 +744,7 @@ def _call_llm(messages: list[dict[str, str]]) -> str:
             text=True,
             capture_output=True,
             timeout=int(os.environ.get("BRAIN_CHAT_HERMES_TIMEOUT", "180")),
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as e:
         raise BrainChatError("Hermes 对话超时，请稍后重试或缩短问题。") from e

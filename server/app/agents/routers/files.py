@@ -288,10 +288,17 @@ async def upload_files(project_id: str, files: list[UploadFile] = File(...),
         except HTTPException:
             continue
         os.makedirs(os.path.dirname(dest), exist_ok=True)
-        data = await f.read()
+        # Stream the upload to disk in chunks instead of reading the whole file
+        # into memory — large files (up to ~300MB) would otherwise spike RAM.
+        size = 0
         with open(dest, "wb") as out:
-            out.write(data)
-        uploaded.append({"name": name, "path": dest, "size": len(data),
+            while True:
+                chunk = await f.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                out.write(chunk)
+        uploaded.append({"name": name, "path": dest, "size": size,
                          "mimeType": f.content_type})
     return {"success": True, "files": uploaded, "targetPath": target_dir,
             "message": f"Uploaded {len(uploaded)} file(s) successfully"}

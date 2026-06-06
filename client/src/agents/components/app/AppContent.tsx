@@ -10,6 +10,7 @@ import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/Palett
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
+import { authenticatedFetch } from '../../utils/api';
 
 export default function AppContent() {
   return (
@@ -98,6 +99,70 @@ function AppContentInner() {
       navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
     };
   }, [navigate, refreshProjectsSilently, setActiveTab, setSidebarOpen]);
+
+  // Deep-analysis handoff: the market-research "深入分析" panel stashes a
+  // { provider, prompt, doc } payload then navigates here. We preselect the
+  // provider, park the prompt + report doc, then open a fresh chat in a
+  // dedicated workspace so the composer uploads the report and prefills the
+  // prompt without the user having to pick a working dir. Runs once on mount.
+  const handoffConsumedRef = useRef(false);
+  useEffect(() => {
+    if (handoffConsumedRef.current) return;
+    handoffConsumedRef.current = true;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem('ivyea-ops-agent-handoff');
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    sessionStorage.removeItem('ivyea-ops-agent-handoff');
+    try {
+      const payload = JSON.parse(raw) as {
+        provider?: string;
+        prompt?: string;
+        doc?: { filename: string; relPath: string; content: string };
+      };
+      if (typeof payload.provider === 'string' && payload.provider.trim()) {
+        localStorage.setItem('selected-provider', payload.provider);
+      }
+      if (typeof payload.prompt === 'string' && payload.prompt) {
+        localStorage.setItem('ivyea-ops-agent-initial-input', payload.prompt);
+      }
+      // The full report travels as a document; the composer uploads it into the
+      // selected working dir once a project is selected (see useChatComposerState).
+      if (payload.doc && typeof payload.doc.content === 'string') {
+        localStorage.setItem('ivyea-ops-agent-handoff-doc', JSON.stringify(payload.doc));
+      } else {
+        localStorage.removeItem('ivyea-ops-agent-handoff-doc');
+      }
+    } catch {
+      return;
+    }
+    setActiveTab('chat');
+    setSidebarOpen(false);
+
+    // Prepare (or reuse) the dedicated deep-analysis workspace and open a new
+    // chat in it, which mounts the composer → uploads the report + prefills.
+    void (async () => {
+      try {
+        const resp = await authenticatedFetch('/api/projects/deep-analysis-workspace', {
+          method: 'POST',
+        });
+        if (!resp.ok) throw new Error(`workspace ${resp.status}`);
+        const data = await resp.json();
+        await refreshProjectsSilently();
+        if (data?.project) {
+          handleNewSession(data.project);
+          return;
+        }
+      } catch {
+        // Fall back to the plain landing — the prompt/doc stay parked and load
+        // as soon as the user picks any working dir.
+      }
+      navigate('/');
+    })();
+  }, [navigate, setActiveTab, setSidebarOpen, refreshProjectsSilently, handleNewSession]);
 
   // Permission recovery: query pending permissions on WebSocket reconnect or session change
   useEffect(() => {

@@ -112,6 +112,20 @@ export async function getHealth(): Promise<HealthResp> {
   return data;
 }
 
+export interface AiCall {
+  ts: string;
+  provider: string;
+  ok: boolean;
+  chars: number;
+  kind: string;
+  failures: string[];
+}
+
+export async function getAiLog(): Promise<AiCall[]> {
+  const { data } = await api.get<{ calls: AiCall[] }>("/settings/ai-log", { timeout: 8000 });
+  return data.calls || [];
+}
+
 export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
   await api.post("/auth/change-password", { old_password: oldPassword, new_password: newPassword });
 }

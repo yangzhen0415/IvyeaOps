@@ -14,6 +14,8 @@ way the Node list path did.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import json
 import os
 import logging
@@ -271,7 +273,8 @@ def synchronize_hermes() -> int:
                             os.path.expanduser("~/.hermes/node/bin"), env.get("PATH", "")])
     try:
         proc = subprocess.run([binary, "sessions", "export", "-", "--source", "cli"],
-                              capture_output=True, text=True, timeout=30, env=env)
+                              capture_output=True, text=True, timeout=30, env=env,
+                              **no_window_kwargs())
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
         logger.warning("hermes export failed: %s", e)
         return 0

@@ -2,11 +2,12 @@
  * First-run Setup Wizard
  *
  * Shown once to new users who haven't set a password yet.
- * Four steps:
+ * Five steps:
  *   0. Welcome
  *   1. Agent Detection + install
- *   2. API Keys (apimart + optional sorftime)
- *   3. Done
+ *   2. Global fallback model (assistant slot) — makes AI work without a local agent
+ *   3. API Keys (apimart + optional sorftime)
+ *   4. Done
  *
  * On completion calls POST /api/setup/complete, then navigates to /.
  */
@@ -339,7 +340,7 @@ function StepAgents({
         />
       ))}
       <div style={{ ...S.hint, marginTop: 4 }}>
-        💡 三个都没安装也可以点「跳过」，后续在「系统配置」中安装完再使用 AI 功能。
+        💡 一个都不想装也可以「跳过」——下一步配置「全局兜底大模型」后，所有 AI 功能照样能用。
       </div>
       <div style={S.row}>
         <button style={S.btnSecondary} onClick={onNext}>
@@ -354,7 +355,144 @@ function StepAgents({
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — API Keys
+// Step 2 — Global fallback model (assistant slot)
+//
+// This is the practical "works out of the box" path: users without a local
+// agent CLI (hermes/codex/claude) can point IvyeaOps at any OpenAI-compatible
+// model here, and every board's text AI falls back to it. Mirrors the
+// 「全局兜底大模型」 block in 系统配置.
+// ---------------------------------------------------------------------------
+
+const FALLBACK_PROVIDERS: Array<{ value: string; label: string; base: string; modelHint: string }> = [
+  { value: "deepseek",   label: "DeepSeek",             base: "https://api.deepseek.com",       modelHint: "deepseek-chat" },
+  { value: "openai",     label: "OpenAI",               base: "https://api.openai.com/v1",      modelHint: "gpt-4o-mini" },
+  { value: "anthropic",  label: "Anthropic (Claude)",   base: "https://api.anthropic.com/v1",   modelHint: "claude-sonnet-4-6" },
+  { value: "openrouter", label: "OpenRouter",           base: "https://openrouter.ai/api/v1",   modelHint: "deepseek/deepseek-chat" },
+  { value: "groq",       label: "Groq",                 base: "https://api.groq.com/openai/v1", modelHint: "llama-3.3-70b-versatile" },
+  { value: "kimi",       label: "Kimi（月之暗面）",      base: "https://api.kimi.com/coding/v1", modelHint: "kimi-k2-0905-preview" },
+  { value: "custom",     label: "自定义（OpenAI 兼容）", base: "",                               modelHint: "你的模型名" },
+];
+
+function StepFallbackModel({ onNext }: { onNext: () => void }) {
+  const [provider, setProvider] = useState("deepseek");
+  const [model, setModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const preset = FALLBACK_PROVIDERS.find((p) => p.value === provider)!;
+
+  const save = async () => {
+    if (!apiKey.trim()) {
+      setErr("请填写 API Key，或点「跳过」稍后在系统配置里补。");
+      return;
+    }
+    if (provider === "custom" && !baseUrl.trim()) {
+      setErr("自定义提供商需要填写 Base URL。");
+      return;
+    }
+    setSaving(true);
+    setErr("");
+    try {
+      await patchSettings({
+        assistant_provider: provider,
+        assistant_model: model.trim() || preset.modelHint,
+        assistant_api_key: apiKey.trim(),
+        assistant_base_url: baseUrl.trim(),
+      } as any);
+      onNext();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || e?.message || "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div style={S.title}>全局兜底大模型</div>
+      <div style={S.sub}>
+        当本机的 Agent（Hermes/Codex/Claude）都不可用时，各板块的 AI 会统一降级到这个模型。
+        <strong>没装本地 Agent 的话，填这里就能直接用全部 AI 功能</strong>，强烈建议配置。
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>提供商</label>
+        <select
+          style={{ ...S.input, cursor: "pointer" }}
+          value={provider}
+          onChange={(e) => { setProvider(e.target.value); setBaseUrl(""); }}
+        >
+          {FALLBACK_PROVIDERS.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>模型名称</label>
+        <input
+          style={S.input}
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder={`留空用默认：${preset.modelHint}`}
+          autoComplete="off"
+        />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={S.label}>API Key</label>
+        <input
+          style={S.input}
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="sk-..."
+          autoComplete="off"
+        />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={S.label}>
+          Base URL{" "}
+          <span style={{ fontSize: 9, color: "var(--t3)" }}>
+            {provider === "custom" ? "（必填）" : "（留空用默认）"}
+          </span>
+        </label>
+        <input
+          style={S.input}
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          placeholder={preset.base || "https://your-endpoint/v1"}
+          autoComplete="off"
+        />
+        <div style={S.hint}>OpenAI 兼容端点；选 Anthropic 时走 Claude 原生 API。</div>
+      </div>
+
+      {err && (
+        <div
+          style={{
+            fontSize: 11, color: "var(--red)", padding: "6px 10px",
+            background: "rgba(248,113,113,.08)", border: "1px solid rgba(248,113,113,.2)",
+            borderRadius: 4, marginBottom: 10,
+          }}
+        >
+          {err}
+        </div>
+      )}
+
+      <div style={S.row}>
+        <button style={S.btnSecondary} onClick={onNext}>跳过</button>
+        <button style={S.btnPrimary} onClick={save} disabled={saving}>
+          {saving ? "保存中…" : "保存并继续 →"}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 3 — API Keys
 // ---------------------------------------------------------------------------
 
 function StepApiKeys({
@@ -539,7 +677,7 @@ function StepDone({ onFinish }: { onFinish: () => void }) {
 export default function Setup({ checks }: { checks: SetupChecks }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const TOTAL = 4;
+  const TOTAL = 5;
 
   const next = () => setStep((s) => Math.min(s + 1, TOTAL - 1));
 
@@ -552,7 +690,7 @@ export default function Setup({ checks }: { checks: SetupChecks }) {
     navigate("/", { replace: true });
   };
 
-  const STEP_LABELS = ["欢迎", "Agent", "密钥", "完成"];
+  const STEP_LABELS = ["欢迎", "Agent", "兜底模型", "密钥", "完成"];
 
   return (
     <div style={S.page}>
@@ -564,8 +702,9 @@ export default function Setup({ checks }: { checks: SetupChecks }) {
 
         {step === 0 && <StepWelcome onNext={next} />}
         {step === 1 && <StepAgents checks={checks} onNext={next} />}
-        {step === 2 && <StepApiKeys checks={checks} onNext={next} />}
-        {step === 3 && <StepDone onFinish={finish} />}
+        {step === 2 && <StepFallbackModel onNext={next} />}
+        {step === 3 && <StepApiKeys checks={checks} onNext={next} />}
+        {step === 4 && <StepDone onFinish={finish} />}
       </div>
     </div>
   );

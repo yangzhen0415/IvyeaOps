@@ -1,87 +1,80 @@
-# External integrations
+# 外部集成
 
-IvyeaOps runs standalone. The features below are *optional*: configure
-them only if you've installed the corresponding tool on the same host.
+IvyeaOps 可独立运行。下面这些功能都是**可选**的：只有当你在同一台主机上装了
+对应工具时才需要配置。
 
-All integration paths are configured via:
+所有集成路径的配置方式：
 
-- the web UI at `系统配置 → 外部集成路径`, **or**
-- the matching `IVYEA_OPS_*` env in `server/.env` as a fallback.
+- 网页 `系统配置 → 智能体 → 外部集成路径`，**或**
+- 在 `server/.env` 里填对应的 `IVYEA_OPS_*` 环境变量作为兜底。
 
-The UI's **系统健康状态** panel shows which integrations are live.
+UI 的 **系统状态** 面板会显示哪些集成已就绪。
 
-## What each integration enables
+## 每个集成能开启什么
 
-### Hermes (`hermes_bin`, `hermes_db`, `hermes_node_bin`)
+### Hermes（`hermes_bin`、`hermes_db`、`hermes_node_bin`）
 
-[Hermes Agent](https://github.com/anthropics/hermes) — gateway for Claude
-API requests with cron jobs, MCP servers, message history.
+[Hermes Agent](https://github.com/anthropics/hermes) —— 面向 Claude API 请求的
+网关，带定时任务、MCP 服务、消息历史。
 
-- `hermes_bin` lets the workbench Agent picker pick "hermes" as the
-  runner for ASIN audits, ad audits, news digests, brain chat.
-- `hermes_db` (`/root/.hermes/state.db`) feeds the token-usage monitor
-  with per-session token / model rows.
-- `hermes_node_bin` (`/root/.hermes/node/bin`) is prepended to the spawn
-  PATH so Hermes can find its bundled `node` and child CLIs.
+- `hermes_bin` 让工作台的智能体选择器能把 "hermes" 作为 ASIN 审计、广告审计、
+  Listing 分析、知识库对话等的运行器。
+- `hermes_db`（`/root/.hermes/state.db`）给 token 用量监控提供逐会话的
+  token / 模型记录。
+- `hermes_node_bin`（`/root/.hermes/node/bin`）会被加到 spawn 的 PATH 前面，
+  让 Hermes 找到它自带的 `node` 和子 CLI。
 
-The News page also calls `hermes cronjob run <id>` to refresh the AI
-digest; that needs only `hermes_bin`.
+### Codex（`codex_bin`、`codex_db`、`feishu_codex_db`）
 
-### Codex (`codex_bin`, `codex_db`, `feishu_codex_db`)
+[OpenAI Codex CLI](https://github.com/openai/codex)。智能体选择器会把它与
+Hermes / Claude 并列。`codex_db`（以及飞书中继旁车安装的变体 `feishu_codex_db`）
+提供 token 用量。
 
-[OpenAI Codex CLI](https://github.com/openai/codex). The agent picker
-exposes it alongside Hermes / Claude. `codex_db` (and the variant
-`feishu_codex_db` for a Feishu-relay sidecar install) feeds token usage.
+### Claude Code（`claude_bin`、`claude_projects_dir`）
 
-### Claude Code (`claude_bin`, `claude_projects_dir`)
+[Claude Code CLI](https://docs.claude.com/en/docs/claude-code)。
 
-[Claude Code CLI](https://docs.claude.com/en/docs/claude-code).
-
-- `claude_bin` — point at the platform binary, not the `claude.exe`
-  shim. Common locations:
+- `claude_bin` —— 指向平台二进制，而不是 `claude.exe` 那个 shim。常见位置：
   - `/root/.hermes/node/lib/node_modules/@anthropic-ai/claude-code/node_modules/@anthropic-ai/claude-code-linux-x64/claude`
-  - `/usr/local/bin/claude` (when installed via the official installer)
-- `claude_projects_dir` (`~/.claude/projects`) — Claude Code's per-project
-  jsonl session logs; token monitor reads them.
+  - `/usr/local/bin/claude`（用官方安装器装的情况）
+- `claude_projects_dir`（`~/.claude/projects`）—— Claude Code 的逐项目 jsonl
+  会话日志；token 监控会读它。
 
-### Kiro (`kiro_cli_bin`, `kiro_gateway_db`, `kiro_cli_db`, `kiro_cli_sessions_dir`)
+### Kiro（`kiro_cli_bin`、`kiro_gateway_db`、`kiro_cli_db`、`kiro_cli_sessions_dir`）
 
-[Kiro CLI](https://kiro.dev/). Optional alternative agent runner.
+[Kiro CLI](https://kiro.dev/)。可选的另一种智能体运行器。
 
-- `kiro_cli_bin` — agent picker entry.
-- `kiro_gateway_db` — locally-hosted Kiro Gateway usage stats.
-- `kiro_cli_db` + `kiro_cli_sessions_dir` — token estimation for CLI
-  sessions (no exact token counter; we estimate from `context_usage_percentage`).
+- `kiro_cli_bin` —— 智能体选择器入口。
+- `kiro_gateway_db` —— 本地 Kiro Gateway 的用量统计。
+- `kiro_cli_db` + `kiro_cli_sessions_dir` —— CLI 会话的 token 估算（没有精确
+  计数器，从 `context_usage_percentage` 估算）。
 
-### GBrain / Bun (`bun_bin`)
+### GBrain / Bun（`bun_bin`）
 
-GBrain is a Bun-linked knowledge-base CLI. Setting `bun_bin`
-(`/root/.bun/bin`) prepends it to the gbrain spawn PATH so the bun
-runtime is discoverable. The gbrain executable itself is configured
-under `GBrain 知识库` (key `gbrain_bin`).
+GBrain 是一个 Bun 链接的知识库 CLI。设置 `bun_bin`（`/root/.bun/bin`）会把它加到
+gbrain spawn 的 PATH 前面，让 bun 运行时可被发现。gbrain 可执行文件本身在
+`GBrain 知识库`（键 `gbrain_bin`）下配置。
 
-## Adding a new integration
+## 新增一个集成
 
-1. Add the key to `_DEFAULTS` and `_ENV_MAP` in
-   `server/app/core/hub_settings.py`.
-2. Add a getter to `server/app/core/integrations.py` (or extend
-   `extra_path_dirs()` if it's a PATH augmentation).
-3. Add the field to the TypeScript types in
-   `client/src/api/settings.ts` and a `<Field>` in
-   `client/src/pages/workbench/HubSettings.tsx`.
-4. Add a row to `all_status()` in integrations.py and a corresponding
-   row in the HealthPanel `rows[]` so the status panel picks it up.
+1. 在 `server/app/core/hub_settings.py` 的 `_DEFAULTS` 和 `_ENV_MAP` 加键。
+2. 在 `server/app/core/integrations.py` 加 getter（若是 PATH 增补则扩展
+   `extra_path_dirs()`）。
+3. 在 `client/src/api/settings.ts` 加 TypeScript 类型，并在
+   `client/src/pages/workbench/HubSettings.tsx` 加一个 `<Field>`。
+4. 在 integrations.py 的 `all_status()` 加一行，并在 HealthPanel 的 `rows[]`
+   加对应行，让状态面板能显示它。
 
-The pattern is intentionally repetitive — one place per layer — but it
-keeps every integration discoverable without dynamic dispatch.
+这个模式刻意重复——每层各一处——但好处是不用动态分发就能让每个集成都可发现。
 
-## Removing the integration noise entirely
+## 完全去掉集成噪音
 
-If you don't run any of the above and want a cleaner UI:
+如果你不跑上面任何工具、想要更干净的 UI：
 
-1. Leave all paths empty (the default). The agent picker will only show
-   runners whose binary is on `PATH`; the monitor will show "(unconfigured)"
-   for each token-source row.
-2. Optional: hide the "外部集成路径" section by removing the corresponding
-   `<Section>` block from `HubSettings.tsx`. The backend still accepts
-   the keys via API so you can re-enable them later.
+1. 所有路径留空（默认就是空）。智能体选择器只会显示二进制在 `PATH` 上的运行器；
+   监控会对每个 token 来源显示「(未配置)」。
+2. 可选：把 `HubSettings.tsx` 里对应的 `<Section>` 块删掉以隐藏「外部集成路径」。
+   后端仍通过 API 接受这些键，方便以后重新启用。
+
+> 注：**资讯**板块现在是按需用 RSS + 标准 AI 链现场生成日报，已不再依赖 Hermes
+> 的定时任务，因此即使不装 Hermes 也能正常用。

@@ -9,6 +9,8 @@ P9 cutover.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import json
 import os
@@ -56,7 +58,8 @@ async def _run_cli(bin_name: str, args: list[str], cwd: str, timeout: float = 18
     try:
         proc = await asyncio.create_subprocess_exec(
             binary, *args, cwd=cwd, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT, env=os.environ.copy())
+            stderr=asyncio.subprocess.STDOUT, env=os.environ.copy(),
+            **no_window_kwargs())
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         output = out.decode("utf-8", "replace")
         if proc.returncode != 0:

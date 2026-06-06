@@ -4,6 +4,8 @@ import AsinMonitor from "./home/AsinMonitor";
 import AlertStrip from "./home/AlertStrip";
 import CategoryWatch from "./home/CategoryWatch";
 import MarketTraffic from "./home/MarketTraffic";
+import { getDataSource, setDataSource, dataSourceMeta, type DataSourceId } from "../../lib/dataSource";
+import DataSourcePicker from "../../components/DataSourcePicker";
 
 const STORAGE_MKT = "ivyea-ops-pulse-marketplace";
 const STORAGE_TAB = "ivyea-ops-home-tab";
@@ -26,12 +28,36 @@ const TABS: { key: HomeTab; label: string; icon: string }[] = [
   { key: "category", label: "类目大盘", icon: "☰" },
 ];
 
+// Shown when the chosen data source has no backend wired yet.
+function DataSourcePlaceholder({ name }: { name: string }) {
+  return (
+    <div className="pulse-onboard" style={{ textAlign: "center", padding: "48px 24px" }}>
+      <div className="pulse-onboard-title">数据源「{name}」即将支持</div>
+      <div className="pulse-onboard-desc" style={{ marginTop: 8 }}>
+        当前仅 <b>Sorftime</b> 已接入。{name} 的数据客户端还在开发中——
+        在「系统配置 → 数据源」填好 {name} 密钥后，接入完成即可在此切换使用。
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [marketplace, setMarketplace] = useState(() => localStorage.getItem(STORAGE_MKT) || "US");
   const [tab, setTab] = useState<HomeTab>(() => (localStorage.getItem(STORAGE_TAB) as HomeTab) || "keyword");
+  const [dataSource, setDataSourceState] = useState<DataSourceId>(getDataSource);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [alertReloadKey, setAlertReloadKey] = useState(0);
   const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Persist + reload all data when the source changes (the tab body remounts
+  // via its key, and AlertStrip re-fetches via reloadKey).
+  const changeDataSource = (id: DataSourceId) => {
+    if (id === dataSource) return;
+    setDataSource(id);
+    setDataSourceState(id);
+    setAlertReloadKey(k => k + 1);
+  };
+  const dsReady = dataSourceMeta(dataSource).ready;
 
   useEffect(() => { localStorage.setItem(STORAGE_MKT, marketplace); }, [marketplace]);
   useEffect(() => { localStorage.setItem(STORAGE_TAB, tab); }, [tab]);
@@ -56,7 +82,9 @@ export default function Home() {
           <span style={{ color: "var(--acc)" }}>◧</span> 运营驾驶舱
           <span className="home-date">{today}</span>
         </span>
-        <div className="market-mkt-wrap" ref={pickerRef}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <DataSourcePicker value={dataSource} onChange={changeDataSource} />
+          <div className="market-mkt-wrap" ref={pickerRef}>
           <button className="market-mkt-btn" onClick={() => setPickerOpen(o => !o)} title="选择站点">
             <span className="market-mkt-flag"><img src={FLAG_URL(currentMkt.code)} alt={currentMkt.code} style={{width:16,height:12,verticalAlign:"middle"}} /></span>
             <span className="market-mkt-code">{currentMkt.code}</span>
@@ -77,6 +105,7 @@ export default function Home() {
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -97,17 +126,23 @@ export default function Home() {
         ))}
       </div>
 
-      {/* ── Tab body ── */}
-      <div className="home-tab-body wb-enter" key={tab}>
-        {tab === "keyword" && <KeywordMonitor marketplace={marketplace} />}
-        {tab === "competitor" && (
-          <AsinMonitor kind="competitor" marketplace={marketplace} onChanged={() => setAlertReloadKey(k => k + 1)} />
+      {/* ── Tab body (remounts on data-source change → reloads all data) ── */}
+      <div className="home-tab-body wb-enter" key={tab + ":" + dataSource}>
+        {!dsReady ? (
+          <DataSourcePlaceholder name={dataSourceMeta(dataSource).name} />
+        ) : (
+          <>
+            {tab === "keyword" && <KeywordMonitor marketplace={marketplace} />}
+            {tab === "competitor" && (
+              <AsinMonitor kind="competitor" marketplace={marketplace} onChanged={() => setAlertReloadKey(k => k + 1)} />
+            )}
+            {tab === "own" && (
+              <AsinMonitor kind="own" marketplace={marketplace} onChanged={() => setAlertReloadKey(k => k + 1)} />
+            )}
+            {tab === "category" && <CategoryWatch marketplace={marketplace} />}
+            {tab === "market" && <MarketTraffic marketplace={marketplace} />}
+          </>
         )}
-        {tab === "own" && (
-          <AsinMonitor kind="own" marketplace={marketplace} onChanged={() => setAlertReloadKey(k => k + 1)} />
-        )}
-        {tab === "category" && <CategoryWatch marketplace={marketplace} />}
-        {tab === "market" && <MarketTraffic marketplace={marketplace} />}
       </div>
 
       {/* ── Mobile bottom-sheet marketplace picker ── */}

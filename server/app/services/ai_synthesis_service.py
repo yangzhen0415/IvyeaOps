@@ -16,14 +16,38 @@ import json
 import logging
 import os
 import re
+import time
+from collections import deque
+from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict
 
 import httpx
 
+from app.core.proc import no_window_kwargs
 from app.services.runners import _build_runner_cmd, _find_bin, build_child_env
 
 _log = logging.getLogger(__name__)
+
+# In-memory observability: last N text-chain calls, surfaced in 系统配置 →
+# 「最近 AI 调用」 so admins can see which provider answered without journald.
+_AI_CALL_LOG: "deque[dict[str, Any]]" = deque(maxlen=50)
+
+
+def record_ai_call(provider: str, ok: bool, *, chars: int = 0,
+                   failures: list[str] | None = None, kind: str = "text") -> None:
+    _AI_CALL_LOG.appendleft({
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "provider": provider,
+        "ok": ok,
+        "chars": chars,
+        "kind": kind,
+        "failures": list(failures or []),
+    })
+
+
+def recent_ai_calls(limit: int = 50) -> list[dict[str, Any]]:
+    return list(_AI_CALL_LOG)[:limit]
 
 
 def _apimart_key() -> str:
@@ -65,11 +89,14 @@ def _deepseek_key() -> str:
     return _read_hermes_env().get("DEEPSEEK_API_KEY", "")
 
 
-_VALID_TEXT_PROVIDERS = ("hermes", "codex", "claude", "apimart", "deepseek")
+# "assistant" == the global fallback text model (the AI 问答 slot, assistant_*).
+# It is a user-configured OpenAI-compatible / anthropic HTTP endpoint, so it is
+# safe for non-admin users and acts as the standard chain's fallback step.
+_VALID_TEXT_PROVIDERS = ("hermes", "codex", "claude", "apimart", "deepseek", "assistant")
 
 
 # Providers safe for non-admin users: pure HTTP APIs, no local CLI / shell / MCP.
-_HTTP_ONLY_PROVIDERS = ("deepseek", "apimart")
+_HTTP_ONLY_PROVIDERS = ("deepseek", "apimart", "assistant")
 
 
 def _text_provider_chain() -> list[str]:
@@ -80,24 +107,27 @@ def _text_provider_chain() -> list[str]:
     (deepseek / apimart) so a user request can NEVER spawn a local CLI agent
     (hermes/codex/claude) with shell / MCP / filesystem access."""
     from app.core import hub_settings
+    # Standard chain: Hermes first, then the global fallback model, then the
+    # local CLI agents. Hermes/Codex/Claude unavailable → automatically degrades.
     raw = str(hub_settings.get("text_ai_providers") or "").strip()
     if not raw:
-        chain = ["deepseek", "hermes", "codex", "claude"]
+        chain = ["hermes", "assistant", "codex", "claude"]
     else:
         out: list[str] = []
         for p in raw.split(","):
             p = p.strip().lower()
             if p in _VALID_TEXT_PROVIDERS and p not in out:
                 out.append(p)
-        chain = out or ["deepseek", "hermes", "codex", "claude"]
+        chain = out or ["hermes", "assistant", "codex", "claude"]
 
-    # Non-admin (and only when a request context is set) → HTTP-only.
+    # Non-admin (and only when a request context is set) → HTTP-only, with the
+    # global fallback model first (it is the configured, safe default).
     try:
         from app.core.security import current_user
         cu = current_user.get()
         if cu is not None and cu.get("role") != "admin":
             http = [p for p in chain if p in _HTTP_ONLY_PROVIDERS]
-            return http or ["deepseek", "apimart"]
+            return http or ["assistant", "deepseek", "apimart"]
     except Exception:
         pass
     return chain
@@ -811,9 +841,23 @@ async def generate_text(prompt: str) -> str:
         except Exception as exc:  # noqa: BLE001
             failures.append(f"Apimart: {exc}")
 
+    # Global fallback model (assistant slot) — last-resort HTTP provider so any
+    # text task degrades gracefully even when deepseek/apimart are unavailable.
+    if assistant_text_cfg().get("api_key"):
+        try:
+            parts = []
+            async for chunk in stream_assistant_prompt(prompt):
+                parts.append(chunk)
+            text = "".join(parts).strip()
+            if text:
+                return text
+            failures.append("全局兜底大模型返回空")
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"全局兜底大模型: {exc}")
+
     raise RuntimeError(
         "无可用文本模型。" + (" / ".join(failures) if failures else
-        "请在「系统配置」配置 DeepSeek 或 Apimart key。")
+        "请在「系统配置」配置 DeepSeek / Apimart key 或全局兜底大模型。")
     )
 
 
@@ -859,6 +903,118 @@ async def generate_openai_compat(base_url: str, api_key: str, model: str, prompt
     if not text:
         raise RuntimeError("自定义模型返回空")
     return text
+
+
+# ---------------------------------------------------------------------------
+# Global fallback text model ("assistant" slot) — also powers the AI 问答 panel.
+# This is the canonical home; app.routers.assistant imports from here (DRY).
+# ---------------------------------------------------------------------------
+
+# OpenAI-compatible base URLs per provider name, for when base_url is left blank.
+ASSISTANT_PROVIDER_BASE = {
+    "deepseek":   "https://api.deepseek.com",
+    "openai":     "https://api.openai.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "groq":       "https://api.groq.com/openai/v1",
+    "together":   "https://api.together.xyz/v1",
+    "xiaomi":     "https://token-plan-sgp.xiaomimimo.com/v1",
+    "kimi":       "https://api.kimi.com/coding/v1",
+}
+
+
+def assistant_text_cfg() -> dict:
+    """The global fallback text model (== AI 问答 assistant slot), or {} if the
+    user hasn't configured one. Keys: provider / model / api_key / base_url."""
+    from app.core import hub_settings
+    provider = str(hub_settings.get("assistant_provider") or "").strip()
+    if not provider:
+        return {}
+    return {
+        "provider": provider,
+        "model":    str(hub_settings.get("assistant_model") or "").strip(),
+        "api_key":  str(hub_settings.get("assistant_api_key") or "").strip(),
+        "base_url": str(hub_settings.get("assistant_base_url") or "").strip(),
+    }
+
+
+async def stream_assistant_prompt(prompt: str) -> AsyncGenerator[str, None]:
+    """Stream a single-prompt completion from the global fallback slot.
+
+    Handles anthropic-native and OpenAI-compatible providers, mirroring the
+    AI 问答 panel's behaviour so the two never diverge. Raises if unconfigured.
+    """
+    cfg = assistant_text_cfg()
+    if not cfg:
+        raise RuntimeError("全局兜底大模型未配置（系统配置 → 全局兜底大模型）")
+    provider = cfg["provider"]
+    key = cfg["api_key"]
+    if not key:
+        raise RuntimeError(f"{provider} key 未配置")
+
+    if provider == "anthropic":
+        base = (cfg["base_url"] or "https://api.anthropic.com/v1").rstrip("/")
+        payload = {
+            "model": cfg["model"] or "claude-sonnet-4-6",
+            "max_tokens": 8192,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": True,
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as c:
+            async with c.stream(
+                "POST", f"{base}/messages", json=payload,
+                headers={"Authorization": f"Bearer {key}", "anthropic-version": "2023-06-01"},
+            ) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        ev = json.loads(line[5:].strip())
+                    except Exception:
+                        continue
+                    if ev.get("type") == "content_block_delta":
+                        t = ev.get("delta", {}).get("text", "")
+                        if t:
+                            yield t
+        return
+
+    base = cfg["base_url"] or ASSISTANT_PROVIDER_BASE.get(provider, "")
+    if not base:
+        raise RuntimeError(f"{provider} 需要填写 Base URL")
+    if not cfg["model"]:
+        raise RuntimeError(f"{provider} 需要填写模型名")
+    async for chunk in _stream_openai_compat(key, base.rstrip("/"), cfg["model"], prompt):
+        yield chunk
+
+
+async def _try_assistant(prompt: str, failures: list[str]) -> AsyncGenerator[tuple[str, str], None]:
+    """Chain step for the global fallback model — same contract as _try_deepseek."""
+    yield "_attempt", "assistant"
+    if not assistant_text_cfg().get("api_key"):
+        failures.append(
+            "全局兜底大模型未配置 — 在「系统配置 → 全局兜底大模型」填写 provider / model / key"
+        )
+        return
+    try:
+        got = False
+        async for chunk in stream_assistant_prompt(prompt):
+            got = True
+            yield "assistant", chunk
+        if not got:
+            failures.append("全局兜底大模型返回空")
+        return
+    except httpx.HTTPStatusError as exc:
+        code = exc.response.status_code if exc.response is not None else "?"
+        body = ""
+        try:
+            body = exc.response.text[:200] if exc.response is not None else ""
+        except Exception:
+            pass
+        failures.append(f"全局兜底模型 HTTP {code}：{body or '请求失败'}")
+        _log.warning("assistant fallback failed: HTTP %s — %s", code, body)
+    except Exception as exc:  # noqa: BLE001
+        failures.append(f"全局兜底模型调用失败：{exc}")
+        _log.warning("assistant fallback failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1158,7 +1314,15 @@ async def _try_deepseek(prompt: str, failures: list[str]) -> AsyncGenerator[tupl
 _HERMES_STREAM_WRAPPER = str(
     Path(__file__).parent / "hermes_stream_wrapper.py"
 )
-_HERMES_VENV_PYTHON = str(Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin" / "python")
+
+
+def _hermes_venv_python() -> "str | None":
+    """Path to hermes-agent's venv Python (token-by-token streaming wrapper),
+    platform-aware. Returns None if not present — caller then drives hermes via
+    its plain CLI, which works on Windows and any non-venv install layout."""
+    base = Path.home() / ".hermes" / "hermes-agent" / "venv"
+    cand = base / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    return str(cand) if cand.exists() else None
 
 
 async def _stream_cli_runner(runner: str, prompt: str) -> AsyncGenerator[str, None]:
@@ -1184,14 +1348,16 @@ async def _stream_cli_runner(runner: str, prompt: str) -> AsyncGenerator[str, No
     env.setdefault("NO_COLOR", "1")
     env.setdefault("HERMES_ACCEPT_HOOKS", "1")
 
-    if runner == "hermes":
+    hermes_py = _hermes_venv_python() if runner == "hermes" else None
+    if runner == "hermes" and hermes_py:
         # Use the streaming wrapper: prompt delivered via stdin, no argv length
         # limit, and the wrapper calls AIAgent.chat(stream_callback=...) which
         # fires for every token rather than waiting for the full response.
-        argv = [_HERMES_VENV_PYTHON, _HERMES_STREAM_WRAPPER]
+        argv = [hermes_py, _HERMES_STREAM_WRAPPER]
         stdin_data = prompt.encode("utf-8")
         stdin_mode = asyncio.subprocess.PIPE
     else:
+        # codex / claude — and hermes on Windows / non-venv installs — via plain CLI.
         argv = _build_runner_cmd(runner, binary, prompt)
         stdin_data = None
         stdin_mode = asyncio.subprocess.DEVNULL
@@ -1201,8 +1367,9 @@ async def _stream_cli_runner(runner: str, prompt: str) -> AsyncGenerator[str, No
         stdin=stdin_mode,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
-        cwd="/root",
+        cwd=str(Path.home()),
         env=env,
+        **no_window_kwargs(),
     )
 
     if runner == "hermes" and stdin_data is not None:
@@ -1343,6 +1510,8 @@ async def synthesize(
             gen = _try_deepseek(prompt, failures)
         elif provider == "apimart":
             gen = _try_apimart(prompt, failures)
+        elif provider == "assistant":
+            gen = _try_assistant(prompt, failures)
         else:
             gen = _try_cli(provider, prompt, failures)
         got_real_chunk = False
@@ -1390,3 +1559,52 @@ async def synthesize_native(
     if not got_real_chunk:
         reason = failures[0] if failures else "hermes 无输出"
         yield "error", reason
+
+
+async def run_text_chain(
+    prompt: str, *, order: list[str] | None = None
+) -> tuple[str, str]:
+    """Canonical text generation over the standard fallback chain.
+
+    The single entry point every board should use for "write me text" tasks:
+    Hermes → global fallback model → Codex → Claude (or a custom ``order``).
+    Returns ``(provider, text)`` for the first provider that yields output.
+    Raises ``RuntimeError`` with a diagnostic if the whole chain fails.
+
+    This is the collected (non-streaming) sibling of ``synthesize()``; use
+    ``synthesize()`` directly when you need token-by-token streaming.
+    """
+    chain = order or _text_provider_chain()
+    failures: list[str] = []
+    for provider in chain:
+        if provider == "deepseek":
+            gen = _try_deepseek(prompt, failures)
+        elif provider == "apimart":
+            gen = _try_apimart(prompt, failures)
+        elif provider == "assistant":
+            gen = _try_assistant(prompt, failures)
+        else:
+            gen = _try_cli(provider, prompt, failures)
+        parts: list[str] = []
+        async for prov, chunk in gen:
+            if prov != "_attempt":
+                parts.append(chunk)
+        text = "".join(parts).strip()
+        if text:
+            # Observability: record which provider in the chain actually answered
+            # (and how many earlier ones were skipped/failed) for ops debugging.
+            if failures:
+                _log.info(
+                    "run_text_chain: '%s' answered after %d failure(s): %s",
+                    provider, len(failures), " | ".join(failures)[:300],
+                )
+            else:
+                _log.info("run_text_chain: '%s' answered (%d chars)", provider, len(text))
+            record_ai_call(provider, True, chars=len(text), failures=failures)
+            return provider, text
+    record_ai_call("(none)", False, failures=failures)
+    raise RuntimeError(
+        "所有文本 AI 提供商均不可用：\n"
+        + "\n".join(f"  • {f}" for f in failures)
+        + f"\n\n当前提供商顺序：{', '.join(chain) or '（空）'}"
+    )

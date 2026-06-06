@@ -14,6 +14,8 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+
+from app.core.proc import no_window_kwargs
 from pathlib import Path
 from typing import Any, Dict
 
@@ -244,9 +246,14 @@ _GBRAIN_CONFIG = Path.home() / ".gbrain" / "config.json"
 
 
 def _gbrain_bin() -> str | None:
-    for cand in ("/usr/local/bin/gbrain", str(Path.home() / ".bun" / "bin" / "gbrain")):
-        if Path(cand).exists():
-            return cand
+    import shutil
+    found = shutil.which("gbrain")
+    if found:
+        return found
+    name = "gbrain.exe" if os.name == "nt" else "gbrain"
+    for cand in (Path.home() / ".bun" / "bin" / name, Path("/usr/local/bin/gbrain")):
+        if cand.exists():
+            return str(cand)
     return None
 
 
@@ -291,12 +298,13 @@ await db.exec(`DROP INDEX IF EXISTS idx_chunks_embedding;
 console.log("migrated");
 await db.close();
 """
-    bun = str(Path.home() / ".bun" / "bin" / "bun")
+    bun = str(Path.home() / ".bun" / "bin" / ("bun.exe" if os.name == "nt" else "bun"))
     if not Path(bun).exists():
         return False
     try:
         proc = subprocess.run([bun, "-e", script], cwd=str(gbrain_pkg),
-                              capture_output=True, text=True, timeout=120)
+                              capture_output=True, text=True, timeout=120,
+                              **no_window_kwargs())
         return "migrated" in proc.stdout or "noop" in proc.stdout
     except Exception:
         return False
@@ -353,10 +361,12 @@ def sync_gbrain_embedding(provider: str, model: str, api_key: str) -> None:
     gbrain = _gbrain_bin()
     if gbrain:
         import subprocess
-        env = {**os.environ, "PATH": f"{Path.home()}/.bun/bin:" + os.environ.get("PATH", "")}
+        _bun_bin = str(Path.home() / ".bun" / "bin")
+        env = {**os.environ, "PATH": os.pathsep.join([_bun_bin, os.environ.get("PATH", "")])}
         try:
             subprocess.run([gbrain, "config", "set", "embedding_model", full_model],
-                           env=env, capture_output=True, timeout=20)
+                           env=env, capture_output=True, timeout=20,
+                           **no_window_kwargs())
         except Exception:
             pass
 

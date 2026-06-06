@@ -17,15 +17,20 @@ _DEFAULTS: Dict[str, Any] = {
     "apimart_key": "",
     "apimart_base": "https://api.apimart.ai/v1",
     # Comma-separated text-AI fallback chain for market research / ad-audit /
-    # AI digest etc. Tried in order. Default skips Apimart because the
-    # common Apimart subscription only grants image models — add 'apimart'
-    # here only if your key has access to Claude text models.
-    # Valid values: hermes, codex, claude, apimart
-    "text_ai_providers": "hermes,codex,claude",
+    # AI digest etc. Tried in order. 'assistant' = the global fallback text
+    # model (the AI 问答 slot, assistant_*): when Hermes is down it keeps every
+    # board working before falling through to the Codex/Claude CLIs. Default
+    # skips Apimart because the common Apimart subscription only grants image
+    # models — add 'apimart' here only if your key has Claude text access.
+    # Valid values: hermes, assistant, codex, claude, apimart, deepseek
+    "text_ai_providers": "hermes,assistant,codex,claude",
     # Comma-separated vision-AI fallback chain (for skills that accept file/image inputs).
     # Tried in order; first provider with a configured key wins.
     # Valid values: apimart (Claude Vision), openai (GPT-4o), assistant (custom provider)
     "vision_ai_providers": "apimart,openai,assistant",
+    # 资讯板块 RSS 源（留空用内置默认源）。每行一个：url | 来源名 | 分类
+    # 分类 ∈ {ai_industry, amazon_seller}，省略默认 ai_industry。
+    "news_feeds": "",
     # Hermes LLM — primary model (written to ~/.hermes/.env + config.yaml)
     # provider: deepseek | anthropic | openai | openrouter | google | groq | together | custom
     # Saving any of these auto-syncs into Hermes config; no gateway restart needed.

@@ -421,6 +421,9 @@ function HealthPanel() {
   useEffect(() => { check(); }, [check]);
 
   const rows: Array<{ label: string; key: keyof HealthResp | string; nested?: string }> = [
+    { label: "AI · 文本链可用",           key: "ai_chain", nested: "text" },
+    { label: "AI · 全局兜底大模型",       key: "ai_chain", nested: "global_fallback" },
+    { label: "AI · 视觉识别",             key: "ai_chain", nested: "vision" },
     { label: "Apimart · 图片 / AI 服务", key: "apimart" },
     { label: "Sorftime · 市场数据",       key: "sorftime" },
     { label: "GBrain · 知识库 CLI",       key: "gbrain_bin" },
@@ -567,7 +570,7 @@ const EMPTY: HubSettings = {
   image_model: "", image_api_key: "", image_base_url: "",
   gbrain_embed_provider: "", gbrain_embed_model: "", gbrain_embed_api_key: "",
   apimart_key: "", apimart_base: "https://api.apimart.ai/v1",
-  text_ai_providers: "hermes,codex,claude",
+  text_ai_providers: "hermes,assistant,codex,claude",
   sorftime_key: "", sif_key: "", sellersprite_key: "",
   imgflow_url: "http://127.0.0.1:3001",
   gbrain_bin: "", brain_root: "", openai_api_key: "",
@@ -711,7 +714,7 @@ export default function HubSettings() {
       {/* -- 应用模型：AI 问答 / AI 生图（直连大模型，不走智能体）-- */}
       <Section
         title="应用模型"
-        desc={<>「AI 问答」和「AI 生图」直接调大模型 API，<strong>不经过智能体</strong>。留空则 AI 问答回退默认链路（DeepSeek→Apimart），生图回退 Apimart。</>}
+        desc={<>「全局兜底大模型」是所有板块的<strong>统一降级出口</strong>：当 Hermes/Codex/Claude 都不可用时各板块都会调它，同时它也是「AI 问答」用的模型。「AI 生图」直接调生图 API。均<strong>不经过智能体</strong>；留空则回退默认链路（DeepSeek→Apimart）。</>}
         keys={[
           "assistant_provider", "assistant_model", "assistant_api_key", "assistant_base_url",
           "image_model", "image_api_key", "image_base_url",
@@ -719,8 +722,8 @@ export default function HubSettings() {
         vals={vals} onSave={save}
       >
         <LLMModelBlock
-          title="AI 问答"
-          hint="留空用默认 DeepSeek→Apimart"
+          title="全局兜底大模型（兼 AI 问答）"
+          hint="所有板块的智能体（Hermes/Codex/Claude）都不可用时，统一降级调用这个模型；同时也是「AI 问答」使用的模型。建议配一个稳定的文本大模型。"
           providerKey="assistant_provider" modelKey="assistant_model"
           apiKeyKey="assistant_api_key" baseUrlKey="assistant_base_url"
           vals={vals} set={set}
@@ -780,9 +783,9 @@ export default function HubSettings() {
 
         {gbrainPathsOpen && (
           <div style={{ paddingLeft: 10, borderLeft: "2px solid var(--b)" }}>
-            <Field label={<><Tag kind="opt">可选</Tag>AI 提供商顺序</>}
-              hint={<>逗号分隔：<code>hermes</code> <code>codex</code> <code>claude</code> <code>apimart</code>，按顺序尝试。</>}>
-              <TxtInput value={vals.text_ai_providers} onChange={v => set("text_ai_providers", v)} placeholder="hermes,codex,claude" />
+            <Field label={<><Tag kind="opt">可选</Tag>AI 提供商顺序（全局降级链）</>}
+              hint={<>逗号分隔，按顺序尝试：<code>hermes</code> <code>assistant</code>（全局兜底大模型）<code>codex</code> <code>claude</code> <code>apimart</code> <code>deepseek</code>。所有板块的文本 AI 都走这条链。</>}>
+              <TxtInput value={vals.text_ai_providers} onChange={v => set("text_ai_providers", v)} placeholder="hermes,assistant,codex,claude" />
             </Field>
             <Field label={<><Tag kind="opt">可选</Tag>Hermes 路径</>} hint="留空 = PATH 自动发现">
               <TxtInput value={vals.hermes_bin} onChange={v => set("hermes_bin", v)} placeholder="留空 = PATH 自动发现" />

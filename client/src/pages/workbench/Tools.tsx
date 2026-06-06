@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../components/ConfirmDialog";
-import { fetchAgents, createSession, type AgentInfo } from "../../api/agents";
 import SheetSelect from "../../components/SheetSelect";
 import { marketplaceOptions } from "../../lib/marketplaces";
 import {
@@ -23,6 +21,7 @@ import {
 } from "../../api/client";
 import AdAuditPanel from "./AdAuditPanel";
 import DeepAnalysis from "./DeepAnalysis";
+import DeepAnalysisPanel from "../../components/DeepAnalysisPanel";
 
 const MARKETPLACES = ["US", "UK", "DE", "FR", "CA", "JP", "ES", "IT", "MX", "AU", "AE", "BR", "SA"];
 
@@ -174,7 +173,7 @@ function AsinAuditPanel() {
         <span className="tag tg">主力工具</span>
         <span style={{ fontSize: 13, color: "var(--t)" }}>ASIN 深度审计</span>
         <span style={{ fontSize: 10, color: "var(--t3)" }}>
-          · COSMO + Rufus + Listing + 广告方案
+          · 多维度分析 + 广告方案
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button
@@ -405,10 +404,6 @@ function AsinAuditPanel() {
 
 /* ===================== ASIN deep analysis panel ===================== */
 
-function truncateReport(report: string, maxChars = 8000): string {
-  if (report.length <= maxChars) return report;
-  return report.slice(0, maxChars) + "\n\n[… 报告超出长度，已截断 …]";
-}
 
 const ASIN_ANALYSIS_TYPES = [
   {
@@ -434,79 +429,18 @@ const ASIN_ANALYSIS_TYPES = [
   },
 ];
 
+// Post-audit deep-analysis — uses the shared panel for consistency with
+// 市场调研 / 打法推荐 (report handed off as a document to the agents session).
 function AsinDeepAnalysisPanel({ data }: { data: AuditFull }) {
-  const navigate = useNavigate();
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [selectedType, setSelectedType] = useState(ASIN_ANALYSIS_TYPES[0].id);
-  const [selectedAgent, setSelectedAgent] = useState("");
-  const [launching, setLaunching] = useState(false);
-
-  useEffect(() => {
-    fetchAgents().then((list) => {
-      const enabled = list.filter((a) => a.enabled !== false);
-      setAgents(enabled);
-      if (enabled.length > 0) setSelectedAgent(enabled[0].id);
-    }).catch(() => {});
-  }, []);
-
-  const handleStart = async () => {
-    const typeObj = ASIN_ANALYSIS_TYPES.find((t) => t.id === selectedType);
-    const agent = agents.find((a) => a.id === selectedAgent);
-    if (!typeObj || !agent) return;
-    setLaunching(true);
-    try {
-      const s = await createSession({
-        agent_id: agent.id,
-        model: agent.default_model || agent.models[0] || "",
-        title: `${typeObj.label} · ${data.asin} (${data.marketplace})`,
-        workdir: undefined,
-      });
-      const prompt = typeObj.promptFn(data.asin, data.marketplace, truncateReport(data.raw_md || "（无报告）"));
-      sessionStorage.setItem(`ivyea-ops-pending-msg-${s.id}`, prompt);
-      sessionStorage.setItem("ivyea-ops-jump-session", JSON.stringify({ sessionId: s.id, workdir: null }));
-      navigate("/agents");
-    } catch (e: any) {
-      alert(e?.message || "启动失败");
-    } finally {
-      setLaunching(false);
-    }
-  };
-
-  if (agents.length === 0) return null;
-
+  if (!data.raw_md) return null;
   return (
-    <div className="market-deep-panel">
-      <div className="market-deep-title">◎ 深入分析</div>
-      <div className="market-deep-types">
-        {ASIN_ANALYSIS_TYPES.map((t) => (
-          <button
-            key={t.id}
-            className={"market-deep-type" + (selectedType === t.id ? " active" : "")}
-            onClick={() => setSelectedType(t.id)}
-          >
-            <span className="market-deep-type-icon">{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div className="market-deep-row">
-        <SheetSelect
-          className="inp"
-          value={selectedAgent}
-          onChange={setSelectedAgent}
-          style={{ flex: 1 }}
-          title="选择智能体"
-          options={agents.map((a) => ({ value: a.id, label: a.display_name }))}
-        />
-        <button
-          className="tbtn market-deep-go"
-          onClick={handleStart}
-          disabled={launching || !selectedAgent}
-        >
-          {launching ? <><span className="spin" style={{ marginRight: 4 }} />启动中…</> : "开始分析 →"}
-        </button>
-      </div>
-    </div>
+    <DeepAnalysisPanel
+      types={ASIN_ANALYSIS_TYPES}
+      query={data.asin}
+      marketplace={data.marketplace}
+      report={data.raw_md}
+      slug={data.asin}
+    />
   );
 }
 

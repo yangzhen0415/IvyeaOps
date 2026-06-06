@@ -1,17 +1,15 @@
-# IvyeaOps one-shot install script for Windows (PowerShell 5.1+)
+# IvyeaOps 一键安装（Windows / PowerShell 5.1+）
 #
-# What it does:
-#   1. Checks Python 3.10+ and Node 18+ are available
-#   2. Installs Python dependencies (pip)
-#   3. Builds the React frontend (npm)
-#   4. Generates server\.env with a random secret and an admin password hash
-#   5. Prints next steps
+# 做的事：
+#   1. 自动检测 Python 3.10+ 和 Node 18+；缺失则用 winget 自动安装
+#   2. 创建独立虚拟环境 server\.venv 并安装后端依赖
+#   3. 构建前端
+#   4. 生成 server\.env（随机密钥 + 管理员密码哈希；密码留空则自动生成并显示）
+#   5. 创建桌面快捷方式（指向随仓库提供的「启动 IvyeaOps.bat」）
+#   6. 可选：立即启动
 #
-# Usage (from IvyeaOps repo root):
+# 用法：双击根目录的「安装 IvyeaOps.bat」，或：
 #   powershell -ExecutionPolicy Bypass -File scripts\install.ps1
-#
-# Note: Run from a standard PowerShell or Windows Terminal prompt.
-# Administrator is NOT required unless you want to install Python/Node.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -19,120 +17,234 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RepoRoot
 
-function Write-Info($msg)  { Write-Host "[IvyeaOps] $msg" -ForegroundColor Green }
-function Write-Warn($msg)  { Write-Host "[IvyeaOps] WARN: $msg" -ForegroundColor Yellow }
-function Write-Fail($msg)  { Write-Host "[IvyeaOps] ERROR: $msg" -ForegroundColor Red; exit 1 }
+function Write-Info($msg) { Write-Host "[IvyeaOps] $msg" -ForegroundColor Green }
+function Write-Warn($msg) { Write-Host "[IvyeaOps] 注意: $msg" -ForegroundColor Yellow }
+function Write-Fail($msg) { Write-Host "[IvyeaOps] 错误: $msg" -ForegroundColor Red; Read-Host "按回车退出"; exit 1 }
 
-# ── 1. Prerequisites ──────────────────────────────────────────────────────────
-Write-Info "Checking prerequisites..."
+function Test-Cmd($name) { return [bool](Get-Command $name -ErrorAction SilentlyContinue) }
 
-$Python = $null
-foreach ($bin in @("python", "python3", "py")) {
-    try {
-        $ver = & $bin --version 2>&1
-        if ($ver -match "Python (\d+)\.(\d+)") {
-            $major = [int]$Matches[1]; $minor = [int]$Matches[2]
-            if ($major -ge 3 -and $minor -ge 10) { $Python = $bin; break }
-        }
-    } catch {}
-}
-if (-not $Python) {
-    Write-Fail "Python 3.10+ is required. Download from https://www.python.org/ and re-run."
+function Refresh-Path {
+    # 把机器/用户 PATH 重新读进当前会话，让刚装好的工具立即可见。
+    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $user = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = ($machine, $user -join ";")
 }
 
-$Node = $null
-try {
-    $nodeVer = & node --version 2>&1
-    if ($nodeVer -match "v(\d+)") {
-        if ([int]$Matches[1] -ge 18) { $Node = "node" }
+function Find-Python {
+    foreach ($bin in @("python", "python3", "py")) {
+        if (-not (Test-Cmd $bin)) { continue }
+        try {
+            $ver = & $bin --version 2>&1
+            if ($ver -match "Python (\d+)\.(\d+)") {
+                if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 10) { return $bin }
+            }
+        } catch {}
     }
-} catch {}
-if (-not $Node) {
-    Write-Fail "Node.js 18+ is required. Download from https://nodejs.org/ and re-run."
+    return $null
 }
 
-$npm = $null
-try { $null = & npm --version 2>&1; $npm = "npm" } catch {}
-if (-not $npm) { Write-Fail "npm not found. Ensure Node.js is properly installed." }
+function Find-Node {
+    if (-not (Test-Cmd "node")) { return $false }
+    try {
+        $v = & node --version 2>&1
+        if ($v -match "v(\d+)" -and [int]$Matches[1] -ge 18) { return $true }
+    } catch {}
+    return $false
+}
+
+# ── 1. 自动检测 / 安装运行环境 ────────────────────────────────────────────────
+Write-Info "检测运行环境..."
+$HasWinget = Test-Cmd "winget"
+
+$Python = Find-Python
+if (-not $Python) {
+    if ($HasWinget) {
+        Write-Warn "未检测到 Python 3.10+，正在用 winget 自动安装（约 1-2 分钟）..."
+        winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements
+        Refresh-Path
+        $Python = Find-Python
+    }
+    if (-not $Python) {
+        Write-Fail "需要 Python 3.10+。请从 https://www.python.org/ 安装（勾选 Add to PATH），重开终端后重试。"
+    }
+}
+
+if (-not (Find-Node)) {
+    if ($HasWinget) {
+        Write-Warn "未检测到 Node.js 18+，正在用 winget 自动安装（约 1-2 分钟）..."
+        winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+        Refresh-Path
+    }
+    if (-not (Find-Node)) {
+        Write-Fail "需要 Node.js 18+。请从 https://nodejs.org/ 安装，重开终端后重试。"
+    }
+}
 
 Write-Info "  Python: $(& $Python --version)"
 Write-Info "  Node:   $(& node --version)"
-Write-Info "  npm:    $(& npm --version)"
 
-# ── 2. Python dependencies ────────────────────────────────────────────────────
-Write-Info "Installing Python dependencies..."
-Set-Location "$RepoRoot\server"
-& $Python -m pip install -q -r requirements.txt
-Write-Info "  Python deps installed."
+# ── 2. 后端依赖（独立虚拟环境）────────────────────────────────────────────────
+Write-Info "创建虚拟环境并安装后端依赖..."
+$VenvPy = "$RepoRoot\server\.venv\Scripts\python.exe"
+if (-not (Test-Path $VenvPy)) {
+    & $Python -m venv "$RepoRoot\server\.venv"
+}
+if (-not (Test-Path $VenvPy)) { Write-Fail "创建虚拟环境失败。" }
+& $VenvPy -m pip install -q --upgrade pip
+& $VenvPy -m pip install -q -r "$RepoRoot\server\requirements.txt"
+Write-Info "  后端依赖已装进 server\.venv。"
 
-# ── 3. Frontend build ────────────────────────────────────────────────────────
-Write-Info "Building frontend..."
+# ── 3. 前端构建 ───────────────────────────────────────────────────────────────
+Write-Info "构建前端..."
 Set-Location "$RepoRoot\client"
 & npm install --silent
 & npm run build
-Write-Info "  Frontend built into client\dist."
+Set-Location $RepoRoot
+Write-Info "  前端已构建到 client\dist。"
 
-# ── 4. Generate server\.env ──────────────────────────────────────────────────
-Set-Location "$RepoRoot\server"
-$EnvFile = ".env"
-
+# ── 4. 生成 server\.env ───────────────────────────────────────────────────────
+$EnvFile = "$RepoRoot\server\.env"
 if (Test-Path $EnvFile) {
-    Write-Warn ".env already exists — skipping generation. Delete it and re-run to regenerate."
+    Write-Warn ".env 已存在 — 跳过生成（如需重置请删除后重跑）。"
 } else {
-    Write-Info "Generating server\.env..."
-
-    $Secret = & $Python -c "import secrets; print(secrets.token_urlsafe(32))"
+    Write-Info "生成 server\.env..."
+    $Secret = & $VenvPy -c "import secrets; print(secrets.token_urlsafe(32))"
 
     Write-Host ""
-    Write-Host "  Set an admin password for the web UI."
-    $SecurePw = Read-Host "  Admin password" -AsSecureString
+    Write-Host "  设置网页管理员密码（直接回车 = 自动随机生成并显示）。"
+    $SecurePw = Read-Host "  管理员密码" -AsSecureString
     $Pw = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePw)
-    )
+        [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePw))
+    $Generated = $false
+    if ([string]::IsNullOrWhiteSpace($Pw)) {
+        $Pw = & $VenvPy -c "import secrets; print(secrets.token_urlsafe(9))"
+        $Generated = $true
+    }
+    $PwHash = & $VenvPy -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt()).decode())" $Pw
 
-    $PwHash = & $Python -c @"
-import bcrypt, sys
-pw = sys.argv[1].encode()
-print(bcrypt.hashpw(pw, bcrypt.gensalt()).decode())
-"@ $Pw
-
-    $EnvContent = @"
-# Generated by scripts\install.ps1 -- edit as needed.
-# See docs\CONFIG.md for the full reference.
+    @"
+# 由 scripts\install.ps1 生成，可按需修改。完整说明见 docs\CONFIG.md。
 
 IVYEA_OPS_HOST=127.0.0.1
 IVYEA_OPS_PORT=8001
 IVYEA_OPS_DEV=0
 
-# Session signing key (keep secret, do not change once set)
+# 会话签名密钥（保密，设好后不要改，否则所有人退出登录）
 IVYEA_OPS_SECRET=$Secret
 
 IVYEA_OPS_USER=admin
 IVYEA_OPS_PASSWORD_HASH=$PwHash
 
-# Set this to your public URL (used for CSRF protection)
 IVYEA_OPS_ALLOWED_ORIGINS=http://127.0.0.1:8001
-"@
-    $EnvContent | Out-File -FilePath $EnvFile -Encoding utf8
-    Write-Info "  server\.env created."
+"@ | Out-File -FilePath $EnvFile -Encoding utf8
+    Write-Info "  server\.env 已创建。"
+    if ($Generated) {
+        Write-Host ""
+        Write-Host "  ★ 已自动生成管理员密码：$Pw" -ForegroundColor Yellow
+        Write-Host "    用户名 admin，请记下来；可在网页「系统配置 → 账号安全」里修改。" -ForegroundColor Yellow
+    }
 }
 
-# ── 5. Ensure data directory ──────────────────────────────────────────────────
-Set-Location $RepoRoot
-if (-not (Test-Path "data")) { New-Item -ItemType Directory -Path "data" | Out-Null }
+if (-not (Test-Path "$RepoRoot\data")) { New-Item -ItemType Directory -Path "$RepoRoot\data" | Out-Null }
 
-# ── 6. Done ───────────────────────────────────────────────────────────────────
+# ── 4.5 可选：本地 AI Agent (Hermes) + 知识库 (GBrain) ────────────────────────
+# 二者均可选；不装也能用（首启向导填「全局兜底大模型」即可）。装上后解锁
+# 需要本地工具/MCP 的进阶功能。两个安装器都是官方一行命令、自带依赖。
+Write-Host ""
+$ai = Read-Host "顺便安装本地 AI Agent (Hermes) + 知识库 (GBrain)？联网较慢，可跳过 (y/N)"
+if ($ai -eq "y" -or $ai -eq "Y") {
+    Write-Info "安装 Hermes Agent（官方 Windows 安装器，自带 uv/Python/Node/git-bash）..."
+    try {
+        Invoke-Expression (Invoke-RestMethod "https://hermes-agent.nousresearch.com/install.ps1")
+        Refresh-Path
+        Write-Info "  Hermes 安装完成。"
+    } catch {
+        Write-Warn "Hermes 安装失败（可稍后手动重试：iex (irm https://hermes-agent.nousresearch.com/install.ps1)）：$_"
+    }
+
+    Write-Info "安装 Bun + GBrain..."
+    try {
+        if (-not (Test-Cmd "bun")) {
+            Invoke-Expression (Invoke-RestMethod "https://bun.sh/install.ps1")
+            $env:Path = "$env:USERPROFILE\.bun\bin;" + $env:Path
+            Refresh-Path
+        }
+        $bun = if (Test-Cmd "bun") { "bun" } else { "$env:USERPROFILE\.bun\bin\bun.exe" }
+        & $bun install -g github:garrytan/gbrain
+        $gbrain = "$env:USERPROFILE\.bun\bin\gbrain.exe"
+        if (Test-Path $gbrain) {
+            $brain = "$env:USERPROFILE\brain"
+            if (-not (Test-Path $brain)) { New-Item -ItemType Directory -Path $brain | Out-Null }
+            Push-Location $brain
+            try { & $gbrain init --pglite 2>$null } catch {}
+            Pop-Location
+            Write-Info "  GBrain 安装完成（本地 PGLite，已初始化 ~\brain）。"
+        }
+    } catch {
+        Write-Warn "GBrain 安装失败（可稍后手动重试：bun install -g github:garrytan/gbrain）：$_"
+    }
+    Write-Host "  安装路径会被 IvyeaOps 自动发现；如未识别，可在「系统配置 → 智能体」里填路径。" -ForegroundColor Yellow
+}
+
+# ── 4.6 可选：Listing 采集服务 (amazon-image-workflow, 经 Docker) ─────────────
+# 自包含 docker-compose（自带 Postgres）；免费抓取、零密钥。没 Docker 就跳过，
+# Listing 其余功能照常（手填 + AI），仅无法自动抓竞品。
+if (Test-Path "$RepoRoot\amazon-image-workflow\docker-compose.yml") {
+    if (Test-Cmd "docker") {
+        Write-Host ""
+        $scrape = Read-Host "启动 Listing 采集服务（amazon-image-workflow，Docker，免密钥）？(y/N)"
+        if ($scrape -eq "y" -or $scrape -eq "Y") {
+            Write-Info "启动采集服务（首次构建镜像，较慢）..."
+            Push-Location "$RepoRoot\amazon-image-workflow"
+            try {
+                & docker compose up -d --build
+                Write-Info "  采集服务已启动（:3001）。IvyeaOps 默认已指向它。"
+            } catch {
+                Write-Warn "采集服务启动失败，可稍后手动：cd amazon-image-workflow; docker compose up -d --build"
+            }
+            Pop-Location
+        }
+    } else {
+        Write-Warn "未检测到 Docker —— Listing 采集服务需要 Docker Desktop。装上后："
+        Write-Warn "  cd amazon-image-workflow; docker compose up -d --build"
+        Write-Warn "（不装也行：Listing 其余功能照常，仅无法自动抓竞品。）"
+    }
+}
+
+# ── 5. 桌面快捷方式（指向随仓库提供的启动器）──────────────────────────────────
+$Launcher = "$RepoRoot\启动 IvyeaOps.bat"
+if (-not (Test-Path $Launcher)) {
+    Write-Warn "未找到「启动 IvyeaOps.bat」，跳过快捷方式创建。"
+}
+if (Test-Path $Launcher) {
+try {
+    $Desktop = [Environment]::GetFolderPath("Desktop")
+    $WshShell = New-Object -ComObject WScript.Shell
+    $Shortcut = $WshShell.CreateShortcut("$Desktop\IvyeaOps.lnk")
+    $Shortcut.TargetPath = $Launcher
+    $Shortcut.WorkingDirectory = $RepoRoot
+    $Shortcut.Description = "启动 IvyeaOps 工作台"
+    if (Test-Path "$RepoRoot\client\public\favicon.ico") {
+        $Shortcut.IconLocation = "$RepoRoot\client\public\favicon.ico"
+    }
+    $Shortcut.Save()
+    Write-Info "  桌面快捷方式已创建：IvyeaOps"
+} catch {
+    Write-Warn "桌面快捷方式创建失败（不影响使用），可手动双击「启动 IvyeaOps.bat」。"
+}
+}
+
+# ── 6. 完成 / 可选立即启动 ────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-Write-Host "  IvyeaOps install complete!" -ForegroundColor Green
+Write-Host "  IvyeaOps 安装完成！" -ForegroundColor Green
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Start the server:"
-Write-Host "    cd $RepoRoot\server"
-Write-Host "    $Python -m uvicorn app.main:app --host 127.0.0.1 --port 8001"
+Write-Host "  以后双击桌面「IvyeaOps」或「启动 IvyeaOps.bat」即可启动。"
+Write-Host "  首次登录后会有向导，按提示填一个「全局兜底大模型」即可用全部 AI 功能。"
+Write-Host "  注意：Windows 上终端(PTY)板块不可用，其余功能均正常。"
 Write-Host ""
-Write-Host "  Then open http://127.0.0.1:8001 in your browser."
-Write-Host ""
-Write-Host "  Note: Terminal features (PTY/multi-terminal) are not supported on Windows."
-Write-Host "  All other features (Agent chat, settings, market data, etc.) work normally."
-Write-Host ""
+$go = Read-Host "现在就启动吗？(Y/n)"
+if ($go -ne "n" -and $go -ne "N") {
+    Start-Process -FilePath $Launcher
+}

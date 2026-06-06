@@ -7,6 +7,8 @@ Node does); mutating POST endpoints return HTTP 500 ``{error[, details]}``.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import os
 import re
@@ -35,7 +37,8 @@ class _GitError(Exception):
 
 async def _git(args: list[str], cwd: str) -> str:
     proc = await asyncio.create_subprocess_exec(
-        "git", *args, cwd=cwd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        "git", *args, cwd=cwd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        **no_window_kwargs())
     out, err = await proc.communicate()
     out_s, err_s = out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
     if proc.returncode != 0:

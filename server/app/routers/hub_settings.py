@@ -72,6 +72,13 @@ async def autodetect_settings(_u: str = Depends(require_user)):
     return settings_test.autodetect()
 
 
+@router.get("/settings/ai-log")
+def ai_call_log(_u: str = Depends(require_user)):
+    """Recent text-AI chain calls — which provider answered, for observability."""
+    from app.services import ai_synthesis_service
+    return {"calls": ai_synthesis_service.recent_ai_calls()}
+
+
 @router.get("/settings/health")
 async def settings_health(_u: str = Depends(require_user)):
     """Quick connectivity / existence check for every configured service."""
@@ -126,7 +133,35 @@ async def settings_health(_u: str = Depends(require_user)):
     imgflow_result, = await asyncio.gather(_check_http(imgflow_url + "/"))
 
     from app.core import integrations as _integ
+
+    # AI readiness: can the standard text chain / vision actually run? Gives a
+    # fresh install an at-a-glance answer for "why is AI not working".
+    from app.services import ai_synthesis_service as _ai
+    from app.services.runners import _find_bin as _fb
+    _global_fb = bool(_ai.assistant_text_cfg().get("api_key"))
+    _any_runner = any(_fb(n) for n in ("hermes", "codex", "claude"))
+    _http_text = bool(_ai._deepseek_key() or _ai._apimart_key())
+    _text_ok = _global_fb or _any_runner or _http_text
+    _vision_ok = _ai.has_vision_capability()
+    ai_chain = {
+        "text": {
+            "ok": _text_ok,
+            "detail": "至少一个文本 AI 可用" if _text_ok
+            else "无可用文本 AI：请配置「全局兜底大模型」或安装 hermes/codex/claude 任一",
+        },
+        "global_fallback": {
+            "ok": _global_fb,
+            "detail": "已配置" if _global_fb else "未配置（建议配置以保证开箱即用）",
+        },
+        "vision": {
+            "ok": _vision_ok,
+            "detail": "可用" if _vision_ok else "未配置（影响 Listing 图片识别 / 视觉 Skill）",
+        },
+        "chain_order": ", ".join(_ai._text_provider_chain()),
+    }
+
     return {
+        "ai_chain":  ai_chain,
         "apimart":   _check_key("apimart_key", "API Key 已设置"),
         "sorftime":  _check_key("sorftime_key", "API Key 已设置"),
         "imgflow":   imgflow_result,

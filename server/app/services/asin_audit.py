@@ -16,6 +16,8 @@ Design:
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import json
 import logging
@@ -323,6 +325,7 @@ async def _run_claude(job: Job) -> None:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=child_env,
+            **no_window_kwargs(),
         )
     except Exception as spawn_err:
         job.status = "failed"

@@ -7,6 +7,8 @@ matching the Node behavior of auto-populating from the system config.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import re
 
@@ -42,6 +44,7 @@ async def _git_global(field: str) -> str | None:
             "git", "config", "--global", f"user.{field}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
+            **no_window_kwargs(),
         )
         out, _ = await proc.communicate()
         val = out.decode().strip()
@@ -83,6 +86,7 @@ async def update_git_config(body: GitConfigBody) -> dict:
                 "git", "config", "--global", f"user.{field}", value,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
+                **no_window_kwargs(),
             )
             await proc.communicate()
         except Exception:

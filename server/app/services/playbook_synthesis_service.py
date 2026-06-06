@@ -22,6 +22,7 @@ from typing import Any, AsyncGenerator, Dict
 from app.services.ai_synthesis_service import (
     _text_provider_chain,
     _try_apimart,
+    _try_assistant,
     _try_cli,
     _try_deepseek,
 )
@@ -311,13 +312,15 @@ async def synthesize(
     failures: list[str] = []
     # Skip hermes here: in the fallback path it either already failed (native)
     # or has no pre-fetched-data advantage over the streaming HTTP providers.
-    chain = [p for p in _text_provider_chain() if p != "hermes"] or ["deepseek", "codex", "claude"]
+    chain = [p for p in _text_provider_chain() if p != "hermes"] or ["assistant", "codex", "claude"]
 
     for provider in chain:
         if provider == "deepseek":
             gen = _try_deepseek(prompt, failures)
         elif provider == "apimart":
             gen = _try_apimart(prompt, failures)
+        elif provider == "assistant":
+            gen = _try_assistant(prompt, failures)
         else:
             gen = _try_cli(provider, prompt, failures)
         got_real_chunk = False

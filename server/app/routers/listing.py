@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import json
+import mimetypes
 import os
 import re
 import sqlite3
@@ -19,7 +21,6 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.security import require_user
-from app.services.runners import _build_runner_cmd, _find_bin, build_child_env
 from app.services.skill_repo import get_skill
 
 router = APIRouter()
@@ -128,23 +129,32 @@ def list_projects(_user: str = Depends(require_user)):
 async def create_project(body: CreateProjectReq, _user: str = Depends(require_user)):
     pid = str(uuid.uuid4())[:8]
     now = time.time()
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(f"{_imgflow_base()}/projects", json={
-            "asin": body.asin, "marketplace": body.marketplace,
-            "supplierUrl": body.supplier_url or "",
-        })
-        if resp.status_code not in (200, 201):
-            raise HTTPException(502, f"imgflow create failed: {resp.text}")
-        imgflow_data = resp.json()
-        imgflow_id = imgflow_data.get("id") or imgflow_data.get("project", {}).get("id")
+    # Try to create an imgflow project for auto-scraping. If the 采集 service
+    # isn't running (no Docker / not deployed), fall back to a LOCAL-ONLY project
+    # so the user can still fill product info manually + upload images + run AI
+    # analysis / copy / prompts. Only the "auto-scrape competitor" step needs it.
+    imgflow_id = None
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(f"{_imgflow_base()}/projects", json={
+                "asin": body.asin, "marketplace": body.marketplace,
+                "supplierUrl": body.supplier_url or "",
+            })
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            imgflow_id = data.get("id") or data.get("project", {}).get("id")
+    except httpx.RequestError:
+        imgflow_id = None  # 采集服务不可达 → 本地项目
+
     conn = _db()
     conn.execute(
         "INSERT INTO listing_projects (id,asin,marketplace,imgflow_project_id,status,created_at,updated_at) VALUES (?,?,?,?,'created',?,?)",
-        (pid, body.asin, body.marketplace, str(imgflow_id), now, now)
+        (pid, body.asin, body.marketplace, str(imgflow_id or ""), now, now)
     )
     conn.commit()
     conn.close()
-    return {"id": pid, "imgflow_id": imgflow_id, "asin": body.asin}
+    return {"id": pid, "imgflow_id": imgflow_id, "asin": body.asin,
+            "scrape_available": imgflow_id is not None}
 
 
 @router.get("/projects/{project_id}")
@@ -366,103 +376,16 @@ def delete_uploaded_image(project_id: str, filename: str, _user: str = Depends(r
 
 # ─── AI Provider Fallback Chain ───────────────────────────────────────────────
 
-_ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
-
-
-def _strip_agent_output(runner: str, output: str) -> str:
-    """Normalize CLI output from Hermes/Codex into the assistant answer."""
-    text = _ANSI_RE.sub("", output or "").strip()
-    if not text:
-        return ""
-
-    # Codex exec often prints session/reasoning metadata before the final answer.
-    if runner == "codex":
-        match = re.search(r"\ncodex(?:[^\n]*)?\n(?P<answer>.+?)(?:\ntokens used\n|\Z)", text, re.S)
-        if match:
-            return match.group("answer").strip()
-        lines = [
-            line for line in text.splitlines()
-            if not line.startswith("OpenAI Codex")
-            and not line.startswith("workdir:")
-            and not line.startswith("model:")
-            and not line.startswith("approval:")
-            and not line.startswith("sandbox:")
-            and not line.startswith("reasoning")
-            and not line.startswith("session")
-            and line.strip() != "codex"
-        ]
-        text = "\n".join(lines).strip()
-
-    if runner == "hermes":
-        lines = [line for line in text.splitlines() if not line.strip().startswith("session_id:")]
-        text = "\n".join(lines).strip()
-
-    return text
-
-
-def _agent_error_from_output(output: str) -> Optional[str]:
-    text = _ANSI_RE.sub("", output or "").strip()
-    low = text.lower()
-    if not text:
-        return None
-    if "http 429" in low or "usage limit" in low or "the usage limit has been reached" in low:
-        return "额度限制/429：Hermes 或 Codex 当前不可用"
-    if "api call failed" in low:
-        return text[-500:]
-    if "failed to initialize" in low or "read-only file system" in low:
-        return text[-500:]
-    if any(line.strip().lower().startswith("error:") for line in text.splitlines()):
-        return text[-500:]
-    return None
-
-
-async def _call_agent_runner(runner: str, prompt: str, timeout: int) -> str:
-    binary = _find_bin(runner)
-    if not binary:
-        raise RuntimeError(f"{runner} CLI 不可用")
-
-    argv = _build_runner_cmd(runner, binary, prompt)
-    env = build_child_env(binary)
-    env.setdefault("TERM", "dumb")
-    env.setdefault("FORCE_COLOR", "0")
-    env.setdefault("NO_COLOR", "1")
-    env.setdefault("HERMES_ACCEPT_HOOKS", "1")
-
-    proc = await asyncio.create_subprocess_exec(
-        *argv,
-        stdin=asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-        cwd=os.environ.get("IVYEA_OPS_LISTING_AI_CWD", "/root"),
-        env=env,
-    )
-    try:
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError as e:
-        proc.kill()
-        await proc.communicate()
-        raise RuntimeError(f"{runner} CLI 超时") from e
-
-    raw = stdout.decode("utf-8", errors="replace")
-    output_error = _agent_error_from_output(raw)
-    if output_error:
-        raise RuntimeError(f"{runner} CLI 返回错误: {output_error}")
-    if proc.returncode != 0:
-        raise RuntimeError(f"{runner} CLI 退出码 {proc.returncode}: {raw[-1200:].strip()}")
-
-    content = _strip_agent_output(runner, raw)
-    if not content:
-        raise RuntimeError(f"{runner} CLI 返回空内容")
-    return content
-
 
 async def _call_ai(prompt: str, max_tokens: int = 2000, web_search: bool = True) -> str:
-    """Call the currently available local agent CLIs: Hermes → Codex."""
-    timeout = int(os.environ.get("IVYEA_OPS_LISTING_AI_TIMEOUT", "180"))
-    runner_order = [x.strip().lower() for x in os.environ.get("IVYEA_OPS_LISTING_AI_RUNNERS", "hermes,codex").split(",") if x.strip()]
-    runner_order = [x for x in runner_order if x in ("hermes", "codex")]
-    if not runner_order:
-        runner_order = ["hermes", "codex"]
+    """Generate text via the standard fallback chain:
+    Hermes → 全局兜底大模型 → Codex → Claude.
+
+    Listing AI is a pure text engine (the prompt forbids tools/commands), so it
+    rides the shared ``run_text_chain`` orchestrator — the exact same chain every
+    other board uses, gaining the global fallback model and Claude automatically.
+    """
+    from app.services import ai_synthesis_service
 
     task_prompt = (
         "你正在作为 Listing 生成板块的纯文本生成引擎。"
@@ -476,14 +399,11 @@ async def _call_ai(prompt: str, max_tokens: int = 2000, web_search: bool = True)
         "输出要求：直接输出最终内容，不要解释调用过程，不要添加 Markdown 代码块。"
     )
 
-    errors = []
-    for runner in runner_order:
-        try:
-            return await _call_agent_runner(runner, task_prompt, timeout)
-        except Exception as e:
-            errors.append(f"{runner}: {e}")
-
-    raise HTTPException(502, f"Hermes/Codex 均不可用: {'; '.join(errors)}")
+    try:
+        _provider, text = await ai_synthesis_service.run_text_chain(task_prompt)
+        return text
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"AI 调用失败（Hermes / 全局兜底 / Codex / Claude 均不可用）：{e}")
 
 
 async def _review_single_prompt(
@@ -724,6 +644,105 @@ def _load_skill_knowledge() -> str:
     return "\n\n".join(parts)
 
 
+# ─── Vision: analyze ALL product images (scraped + uploaded) ──────────────────
+# The vision providers cap each call at 4 images, so we batch and aggregate.
+
+_VISION_BATCH = 4
+
+
+async def _img_datauri_from_url(url: str) -> Optional[str]:
+    """Download an image URL and return a base64 data-URI, or None on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(25, connect=10), follow_redirects=True) as c:
+            r = await c.get(url)
+            r.raise_for_status()
+        ct = (r.headers.get("content-type") or "").split(";")[0].strip()
+        if not ct.startswith("image/"):
+            ct = mimetypes.guess_type(url)[0] or "image/jpeg"
+        return f"data:{ct};base64,{base64.b64encode(r.content).decode()}"
+    except Exception:
+        return None
+
+
+def _img_datauri_from_path(path_str: str) -> Optional[str]:
+    """Read a local uploaded image and return a base64 data-URI, or None."""
+    try:
+        p = Path(path_str)
+        if not p.is_file():
+            return None
+        ct = mimetypes.guess_type(str(p))[0] or "image/jpeg"
+        return f"data:{ct};base64,{base64.b64encode(p.read_bytes()).decode()}"
+    except Exception:
+        return None
+
+
+async def _collect_vision(prompt: str, images_b64: list[str]) -> str:
+    """Run the vision fallback chain and collect its text output."""
+    from app.services import ai_synthesis_service
+    parts: list[str] = []
+    async for prov, chunk in ai_synthesis_service.stream_vision(prompt, images_b64):
+        if prov != "error":
+            parts.append(chunk)
+    return "".join(parts).strip()
+
+
+async def _analyze_all_images(scrape_data: dict) -> str:
+    """Vision-analyze EVERY scraped + uploaded image and return an aggregated
+    "图片卖点清单" used downstream by analysis / copy / image-prompt generation.
+
+    Returns "" when no images or no vision model is configured.
+    """
+    from app.services import ai_synthesis_service
+    if not ai_synthesis_service.has_vision_capability():
+        return ""
+
+    images: list[str] = []
+    for url in _reference_images(scrape_data):
+        d = await _img_datauri_from_url(url)
+        if d:
+            images.append(d)
+    for path_str in scrape_data.get("uploaded_images", []) or []:
+        d = _img_datauri_from_path(path_str)
+        if d:
+            images.append(d)
+    if not images:
+        return ""
+
+    total = len(images)
+    batch_notes: list[str] = []
+    for i in range(0, total, _VISION_BATCH):
+        batch = images[i:i + _VISION_BATCH]
+        lo, hi = i + 1, i + len(batch)
+        prompt = (
+            f"这是某亚马逊产品的第 {lo}-{hi} 张图片（共 {total} 张）。请逐张分析并提取：\n"
+            "① 体现的核心卖点 / 功能点；② 视觉风格 / 构图 / 配色；"
+            "③ 使用场景 / 目标人群；④ 可直接复用到文案与图片提示词的要点。\n"
+            "用简洁中文分点输出，每张图前标注其序号。"
+        )
+        try:
+            text = await _collect_vision(prompt, batch)
+        except Exception:
+            text = ""
+        if text:
+            batch_notes.append(f"【图 {lo}-{hi}】\n{text}")
+
+    if not batch_notes:
+        return ""
+
+    combined = "\n\n".join(batch_notes)
+    # Aggregate the per-batch notes into one de-duplicated, prioritized list.
+    try:
+        summary = await _call_ai(
+            "以下是对一组产品图片逐批的视觉分析。请汇总成一份『图片卖点清单』："
+            "去重合并、按重要度排序，明确列出可用于 Listing 文案与图片提示词的"
+            "卖点、视觉风格与使用场景。\n\n" + combined,
+            web_search=False,
+        )
+        return (summary or "").strip() or combined
+    except Exception:
+        return combined
+
+
 @router.post("/projects/{project_id}/ai-analyze")
 async def ai_analyze(project_id: str, _user: str = Depends(require_user)):
     """Run skill-enhanced AI analysis + imgflow deep analysis (COSMO/Rufus/SIF)."""
@@ -736,6 +755,10 @@ async def ai_analyze(project_id: str, _user: str = Depends(require_user)):
     scrape_data = json.loads(row["scrape_data"]) if row["scrape_data"] else {}
     product_context = _build_product_context(row, scrape_data, {})
     skill_knowledge = _load_skill_knowledge()
+
+    # 0. Vision-analyze EVERY scraped + uploaded image into a selling-point list,
+    #    reused downstream by copy + image-prompt generation (stored on the project).
+    image_insights = await _analyze_all_images(scrape_data)
 
     # 1. Call imgflow deep analysis (COSMO/Rufus/SIF/Sorftime)
     imgflow_analysis = {}
@@ -757,6 +780,9 @@ async def ai_analyze(project_id: str, _user: str = Depends(require_user)):
 
 ## 产品信息
 {product_context}
+
+## 产品图片视觉分析（采集 + 上传的全部图片）
+{image_insights or "（未配置视觉模型或暂无图片）"}
 
 ## imgflow深度分析数据
 {json.dumps(imgflow_analysis, ensure_ascii=False)[:2000] if imgflow_analysis else "未获取到"}
@@ -787,13 +813,13 @@ async def ai_analyze(project_id: str, _user: str = Depends(require_user)):
     try:
         content = await _call_ai(prompt, max_tokens=3000)
     except HTTPException as e:
-        structured = _fallback_analysis(row, scrape_data, analysis_data)
+        structured = _fallback_analysis(row, scrape_data, {})
         content = json.dumps(structured, ensure_ascii=False)
         fallback_used = True
-        warning = f"Hermes/Codex 当前不可用，已使用本地规则生成基础分析。原因：{str(e.detail)[:220]}"
+        warning = f"AI 当前不可用（Hermes/全局兜底/Codex/Claude 均失败），已使用本地规则生成基础分析。原因：{str(e.detail)[:220]}"
 
     # Merge imgflow data with AI analysis
-    combined = {"ai_analysis": content, "imgflow": imgflow_analysis}
+    combined = {"ai_analysis": content, "imgflow": imgflow_analysis, "image_insights": image_insights}
     if fallback_used:
         combined["fallback"] = True
         combined["warning"] = warning
@@ -851,6 +877,11 @@ async def generate_copy(project_id: str, body: GenerateCopyReq, _user: str = Dep
     scrape_data = json.loads(row["scrape_data"]) if row["scrape_data"] else {}
     analysis_data = json.loads(row["analysis_data"]) if row["analysis_data"] else {}
     product_context = _build_product_context(row, scrape_data, analysis_data)
+    # Fold the all-image vision selling-points (from ai-analyze) into the context
+    # so every copy variant is grounded in what the product images actually show.
+    _img_sp = analysis_data.get("image_insights", "")
+    if _img_sp:
+        product_context = f"{product_context}\n\n## 图片卖点（对采集+上传全部图片的视觉分析）\n{_img_sp}"
 
     prompts = {
         "title": f"""你是Amazon Listing优化专家。生成3个优化后的产品标题候选。
@@ -890,7 +921,7 @@ async def generate_copy(project_id: str, body: GenerateCopyReq, _user: str = Dep
         detail = str(e.detail)
         content = _fallback_copy(body.type, row, scrape_data, analysis_data)
         fallback_used = True
-        warning = f"Hermes/Codex 当前不可用，已使用本地规则生成一版可编辑文案。原因：{detail[:220]}"
+        warning = f"AI 当前不可用（Hermes/全局兜底/Codex/Claude 均失败），已使用本地规则生成一版可编辑文案。原因：{detail[:220]}"
 
     field_map = {"title": "title", "bullets": "bullets", "search_terms": "search_terms", "aplus": "aplus_copy"}
     conn = _db()
@@ -920,6 +951,7 @@ async def generate_all_prompts(project_id: str, body: dict, _user: str = Depends
 
     ref_images = scrape_data.get("reference_images", []) or scrape_data.get("imageUrls", [])
     ref_urls_text = "\n".join(ref_images[:3]) if ref_images else "No reference images."
+    img_sp = analysis_data.get("image_insights", "")
 
     sizes = body.get("sizes", {})
     if isinstance(sizes, dict) and "sizes" in sizes:
@@ -946,6 +978,9 @@ IMPORTANT: Do NOT use web search. Do NOT look up any information online. Work ON
 
 ## REFERENCE IMAGES (only source of truth for product appearance)
 {ref_urls_text}
+
+## VISUAL ANALYSIS OF ALL IMAGES (selling points / style / scenes extracted from EVERY scraped + uploaded image)
+{img_sp or "(not available — no vision model configured or no images)"}
 
 ## STEPS TO FOLLOW:
 1. IDENTIFY product appearance from reference images (shape, color, material, features, accessories)
@@ -1132,6 +1167,7 @@ async def _generate_prompts_for_slots(project_id: str, slots: list[str], body: d
 
     ref_images = scrape_data.get("reference_images", []) or scrape_data.get("imageUrls", [])
     ref_urls_text = "\n".join(ref_images[:3]) if ref_images else "No reference images."
+    img_sp = analysis_data.get("image_insights", "")
 
     slot_details = _slot_details_from_body(body, slots)
     slot_ids = [s["id"] for s in slot_details]
@@ -1161,6 +1197,9 @@ IMPORTANT: Do NOT use web search. Work ONLY with the product information provide
 
 ## REFERENCE IMAGES (the real product — supplied to the image model as image inputs)
 {ref_urls_text}
+
+## VISUAL ANALYSIS OF ALL IMAGES (selling points / style / scenes from EVERY scraped + uploaded image)
+{img_sp or "(not available)"}
 
 ## TARGET SLOTS, LABELS, AND CANVAS SIZES
 {slot_text}

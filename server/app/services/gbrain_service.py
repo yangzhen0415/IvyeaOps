@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from app.core.proc import no_window_kwargs
 
 
 def _brain_root() -> Path:
@@ -42,7 +45,16 @@ def _gbrain_bin() -> str:
     val = hub_settings.get("gbrain_bin")
     if val:
         return str(val)
-    return os.environ.get("IVYEA_OPS_GBRAIN_BIN", "/usr/local/bin/gbrain")
+    env = os.environ.get("IVYEA_OPS_GBRAIN_BIN")
+    if env:
+        return env
+    # Prefer PATH lookup (handles Windows .exe/.cmd via PATHEXT), then fall back
+    # to the Bun global install location, platform-aware.
+    found = shutil.which("gbrain")
+    if found:
+        return found
+    name = "gbrain.exe" if os.name == "nt" else "gbrain"
+    return str(Path.home() / ".bun" / "bin" / name)
 
 
 MAX_QUERY_CHARS = 500
@@ -65,8 +77,10 @@ def _env() -> dict[str, str]:
     from app.core import integrations
     env = os.environ.copy()
     # systemd has a narrow PATH; make Bun-linked gbrain discoverable.
-    extras = [*integrations.extra_path_dirs(), "/usr/local/bin", "/usr/bin"]
-    env["PATH"] = ":".join(extras + [env.get("PATH", "")])
+    extras = [*integrations.extra_path_dirs(), str(Path.home() / ".bun" / "bin")]
+    if os.name != "nt":
+        extras += ["/usr/local/bin", "/usr/bin"]
+    env["PATH"] = os.pathsep.join([e for e in extras if e] + [env.get("PATH", "")])
     return env
 
 
@@ -76,13 +90,14 @@ def _run_gbrain(args: list[str], timeout: int = 30) -> CommandResult:
     try:
         proc = subprocess.run(
             [_gbrain_bin(), *args],
-            cwd=str(_brain_root()) if _brain_root().exists() else "/root",
+            cwd=str(_brain_root()) if _brain_root().exists() else str(Path.home()),
             env=_env(),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=timeout,
             check=False,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as e:
         raise GBrainError(f"gbrain command timed out after {timeout}s") from e
@@ -104,6 +119,7 @@ def _run_git(args: list[str], timeout: int = 15) -> CommandResult:
         stderr=subprocess.PIPE,
         timeout=timeout,
         check=False,
+        **no_window_kwargs(),
     )
     return CommandResult(proc.stdout, proc.stderr, proc.returncode)
 

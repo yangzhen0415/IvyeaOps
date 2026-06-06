@@ -827,6 +827,60 @@ export function useChatComposerState({
     if (!selectedProjectId) {
       return;
     }
+    // Deep-analysis handoff: a one-shot prompt parked by the market-research
+    // "深入分析" panel (see AppContent) takes precedence over the per-project
+    // draft so the report lands in the composer once a working dir is chosen.
+    const pendingHandoff = safeLocalStorage.getItem('ivyea-ops-agent-initial-input');
+    if (pendingHandoff) {
+      safeLocalStorage.removeItem('ivyea-ops-agent-initial-input');
+      const docRaw = safeLocalStorage.getItem('ivyea-ops-agent-handoff-doc');
+      safeLocalStorage.removeItem('ivyea-ops-agent-handoff-doc');
+
+      const applyInput = (text: string) => {
+        safeLocalStorage.setItem(`draft_input_${selectedProjectId}`, text);
+        setInput(() => {
+          inputValueRef.current = text;
+          return text;
+        });
+      };
+
+      let doc: { filename: string; relPath: string; content: string } | null = null;
+      if (docRaw) {
+        try {
+          doc = JSON.parse(docRaw);
+        } catch {
+          doc = null;
+        }
+      }
+
+      if (doc && doc.content) {
+        // Upload the full report into the chosen project's working dir so the
+        // agent can Read it (the prompt already references the relative path).
+        // On any failure, fall back to inlining the report so nothing is lost.
+        const slash = doc.relPath.lastIndexOf('/');
+        const targetDir = slash >= 0 ? doc.relPath.slice(0, slash) : '';
+        const fd = new FormData();
+        fd.append('files', new Blob([doc.content], { type: 'text/markdown' }), doc.filename);
+        fd.append('targetPath', targetDir);
+        authenticatedFetch(`/api/projects/${selectedProjectId}/files/upload`, {
+          method: 'POST',
+          body: fd,
+        })
+          .then((resp) => {
+            if (!resp.ok) throw new Error(`upload failed: ${resp.status}`);
+            applyInput(pendingHandoff);
+          })
+          .catch(() => {
+            applyInput(
+              `${pendingHandoff}\n\n（注：报告文件写入失败，以下为完整报告原文）\n\n${doc!.content}`,
+            );
+          });
+        return;
+      }
+
+      applyInput(pendingHandoff);
+      return;
+    }
     const savedInput = safeLocalStorage.getItem(`draft_input_${selectedProjectId}`) || '';
     setInput((previous) => {
       const next = previous === savedInput ? previous : savedInput;

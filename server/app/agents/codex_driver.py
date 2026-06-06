@@ -15,6 +15,8 @@ auth rejects some models (e.g. gpt-5.4); default to gpt-5.5.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import json
 import os
@@ -106,7 +108,7 @@ async def query_codex(command: str, options: dict, writer) -> None:
         proc = await asyncio.create_subprocess_exec(
             *_build_argv(command, options), stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-            cwd=cwd, env=_proc_env())
+            cwd=cwd, env=_proc_env(), **no_window_kwargs())
     except FileNotFoundError:
         await writer.send(create_normalized_message(
             kind="error", content="Codex CLI is not installed.", sessionId=captured, provider=PROVIDER))

@@ -20,7 +20,10 @@ IVYEA_OPS_USER=root
 IVYEA_OPS_PORT=8001
 
 # Python interpreter (must have the requirements.txt deps installed).
-PYTHON_BIN=/usr/bin/python3
+# scripts/install.sh installs deps into server/.venv — point this at it so
+# systemd uses the same isolated environment:
+PYTHON_BIN=${INSTALL_DIR}/server/.venv/bin/python
+# (Or use /usr/bin/python3 if you installed the deps system-wide.)
 
 # CPU-alert cron log location. The directory must be writable by IVYEA_OPS_USER.
 CPU_ALERT_LOG=/var/log/IvyeaOps/cpu-alert.log

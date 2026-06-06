@@ -18,6 +18,8 @@ alert). Everything is audited.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import json
 import re
@@ -349,7 +351,8 @@ async def _run_cli_agent(runner: str, prompt: str) -> str:
     cmd = _build_runner_cmd(runner, binary, prompt)
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-        stdin=asyncio.subprocess.DEVNULL, env=build_child_env(binary))
+        stdin=asyncio.subprocess.DEVNULL, env=build_child_env(binary),
+        **no_window_kwargs())
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=180)
     except asyncio.TimeoutError:

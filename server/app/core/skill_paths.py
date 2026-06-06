@@ -44,19 +44,54 @@ SETTINGS_FILE: Path = STUDIO_ROOT / "settings.json"
 AUDIT_LOG_FILE: Path = STUDIO_ROOT / "audit.log"
 
 
+# Skills bundled with the repo (shipped so fresh installs have the Amazon
+# audit / listing skills the boards depend on, even without a pre-existing
+# Hermes skill library). server/app/core/skill_paths.py → parents[3] = repo root.
+BUNDLED_SKILLS: Path = (Path(__file__).resolve().parents[3] / "skills").resolve()
+
+
+def seed_bundled_skills() -> int:
+    """Copy repo-bundled skills into SKILLS_ROOT, never overwriting an existing
+    skill. Returns how many were newly seeded. Runs on every startup (cheap +
+    idempotent), so install.sh / install.ps1 / Docker / manual all get them."""
+    import shutil
+    if not BUNDLED_SKILLS.is_dir():
+        return 0
+    SKILLS_ROOT.mkdir(parents=True, exist_ok=True)
+    seeded = 0
+    for skill_md in BUNDLED_SKILLS.rglob("SKILL.md"):
+        rel = skill_md.parent.relative_to(BUNDLED_SKILLS)
+        dest = SKILLS_ROOT / rel
+        if dest.exists():
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copytree(skill_md.parent, dest)
+            seeded += 1
+        except Exception:
+            pass
+    return seeded
+
+
 # --- Setup -----------------------------------------------------------------
 
 def ensure_studio_dirs() -> None:
     """Create Studio directories on startup. Idempotent.
 
-    Intentionally does NOT touch SKILLS_ROOT: that's Hermes' territory and
-    will already exist when Hermes is installed. If it's missing we surface
-    that as an error rather than silently creating an empty skills dir.
+    Also seeds the repo-bundled skills into SKILLS_ROOT (no-clobber) so fresh
+    installs have the skills the ASIN/ad audit + Listing boards require.
     """
     STUDIO_ROOT.mkdir(parents=True, exist_ok=True)
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     TRASH_DIR.mkdir(parents=True, exist_ok=True)
     # settings.json and audit.log are created on first write.
+    try:
+        n = seed_bundled_skills()
+        if n:
+            import logging
+            logging.getLogger(__name__).info("seeded %d bundled skill(s) into %s", n, SKILLS_ROOT)
+    except Exception:
+        pass
 
 
 def studio_paths_summary() -> dict[str, str]:

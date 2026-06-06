@@ -11,6 +11,8 @@ a full git client. The full client lives in the terminal tab.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -48,6 +50,7 @@ def _run_git(cwd: Path, args: list[str], *, check: bool = True) -> subprocess.Co
             text=True,
             timeout=_GIT_TIMEOUT_S,
             env={"GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C", "LANG": "C"},
+            **no_window_kwargs(),
         )
     except FileNotFoundError as e:
         raise GitError("git 命令不可用，请安装 git") from e

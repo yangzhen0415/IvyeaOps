@@ -3,8 +3,22 @@ import { streamListingRewrite, type SseEvent } from "../../../api/deepAnalysis";
 import AnalysisSkeleton from "./AnalysisSkeleton";
 import SheetSelect from "../../../components/SheetSelect";
 import { marketplaceOptions } from "../../../lib/marketplaces";
+import DeepAnalysisPanel, { type DeepAnalysisType } from "../../../components/DeepAnalysisPanel";
 
 const MARKETPLACES = ["US", "UK", "DE", "CA", "JP"];
+
+const REWRITE_ANALYSIS_TYPES: readonly DeepAnalysisType[] = [
+  {
+    id: "polish", icon: "◈", label: "继续打磨",
+    promptFn: (q, mkt, report) =>
+      `以下是为「${q}」（${mkt} 站）改写的 Listing 文案：\n\n${report}\n\n请进一步打磨：\n1. 关键词覆盖与可读性的平衡优化\n2. 标题/五点的措辞精修（更有转化力）\n3. 合规风险词排查与替换\n4. 给出修改前后的对比要点`,
+  },
+  {
+    id: "variant", icon: "⬡", label: "A/B 变体",
+    promptFn: (q, mkt, report) =>
+      `以下是为「${q}」（${mkt} 站）改写的 Listing 文案：\n\n${report}\n\n请生成可用于 A/B 测试的变体：\n1. 两套不同卖点侧重的标题变体\n2. 对应的五点描述差异\n3. 每套变体的目标人群与假设\n4. 建议的测试指标与周期`,
+  },
+];
 const FIELD_OPTIONS = [
   { value: "title", label: "标题" },
   { value: "bullets", label: "五点" },
@@ -126,6 +140,16 @@ export default function ListingRewrite() {
             dangerouslySetInnerHTML={{ __html: simpleMarkdown(output) }}
           />
         </div>
+      )}
+
+      {output && !loading && (
+        <DeepAnalysisPanel
+          types={REWRITE_ANALYSIS_TYPES}
+          query={asinsText.split(/[\n,]+/)[0]?.trim() || "listing"}
+          marketplace={marketplace}
+          report={output}
+          slug="listing-rewrite"
+        />
       )}
     </div>
   );

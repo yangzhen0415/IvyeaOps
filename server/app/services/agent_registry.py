@@ -22,6 +22,8 @@ the UI can grey-out the card without breaking other agents.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import os
 import shutil
 import subprocess
@@ -476,6 +478,7 @@ def _read_kiro_models() -> list[str]:
         out = subprocess.run(
             [bin_path, "chat", "--list-models", "--format", "json"],
             capture_output=True, text=True, timeout=12,
+            **no_window_kwargs(),
         )
         data = json.loads(out.stdout)
         models: list[str] = []

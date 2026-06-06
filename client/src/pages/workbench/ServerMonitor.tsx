@@ -13,6 +13,7 @@ import {
   ProcessInfo,
   TokenUsageData,
 } from "../../api/client";
+import { getAiLog, type AiCall } from "../../api/settings";
 
 function color(v: number, warn: number, danger: number) {
   return v > danger ? "var(--red)" : v > warn ? "var(--amber)" : "var(--acc)";
@@ -76,6 +77,7 @@ export default function ServerMonitor() {
   const [procFilter, setProcFilter] = useState("");
   const [procLoading, setProcLoading] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<TokenUsageData | null>(null);
+  const [aiLog, setAiLog] = useState<AiCall[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
@@ -101,6 +103,9 @@ export default function ServerMonitor() {
       }
       if (snapCount % 10 === 0) {
         monitorTokenUsage().then(setTokenUsage).catch(() => {});
+      }
+      if (snapCount % 3 === 2) {
+        getAiLog().then(setAiLog).catch(() => {});
       }
       snapCount += 1;
     };
@@ -319,6 +324,39 @@ export default function ServerMonitor() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ─── AI 调用记录 ─── */}
+      <div className="card mb14">
+        <div className="ct" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>最近 AI 调用</span>
+          <span style={{ color: "var(--t3)", fontSize: 9, textTransform: "none" }}>
+            降级链 Hermes→全局兜底→Codex→Claude
+          </span>
+        </div>
+        {aiLog.length === 0 ? (
+          <div style={{ color: "var(--t3)", fontSize: 10, padding: "4px 0" }}>
+            暂无记录（启动后还没有 AI 文本调用）
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 240, overflowY: "auto" }}>
+            {aiLog.map((c, i) => (
+              <div
+                key={i}
+                style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, flexWrap: "wrap" }}
+                title={c.failures?.length ? "之前失败：\n" + c.failures.join("\n") : ""}
+              >
+                <span style={{ color: c.ok ? "var(--acc)" : "var(--red)", width: 12 }}>{c.ok ? "✓" : "✗"}</span>
+                <span style={{ color: "var(--t3)", minWidth: 120 }}>{c.ts.replace("T", " ")}</span>
+                <span style={{ fontWeight: 600, color: "var(--t)", minWidth: 80 }}>{c.provider}</span>
+                {c.failures && c.failures.length > 0 && (
+                  <span style={{ color: "var(--amber)" }}>降级 {c.failures.length} 次</span>
+                )}
+                {c.chars > 0 && <span style={{ color: "var(--t3)" }}>{c.chars} 字</span>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ─── 进程管理面板 ─── */}

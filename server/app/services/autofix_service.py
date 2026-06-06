@@ -18,6 +18,8 @@ off), so when disabled this module is never invoked and costs nothing.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import shutil
 import subprocess
@@ -87,6 +89,7 @@ def _git(*args: str, cwd: Path | str | None = None, timeout: int = 60) -> subpro
         capture_output=True,
         text=True,
         timeout=timeout,
+        **no_window_kwargs(),
     )
 
 
@@ -169,6 +172,7 @@ async def _run_diagnose(job: Job) -> None:
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(wt),
             env=env,
+            **no_window_kwargs(),
         )
         try:
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=_DIAGNOSE_TIMEOUT_S)
@@ -241,11 +245,13 @@ async def apply(job_id: str) -> Dict[str, Any]:
         proc = subprocess.run(
             ["git", "apply", "--whitespace=nowarn"],
             cwd=str(REPO_ROOT), input=diff_text, capture_output=True, text=True, timeout=60,
+            **no_window_kwargs(),
         )
         if proc.returncode != 0:
             proc = subprocess.run(
                 ["git", "apply", "--3way", "--whitespace=nowarn"],
                 cwd=str(REPO_ROOT), input=diff_text, capture_output=True, text=True, timeout=60,
+                **no_window_kwargs(),
             )
         if proc.returncode != 0:
             raise RuntimeError(f"补丁应用失败: {(proc.stderr or proc.stdout).strip()[:400]}")
@@ -274,6 +280,7 @@ async def _rebuild_frontend() -> None:
         cwd=str(client),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
+        **no_window_kwargs(),
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=600)

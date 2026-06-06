@@ -31,6 +31,7 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const newItemInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // Show toast notification
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
@@ -83,6 +84,24 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
     }
   }, [operations.renamingItem]);
 
+  // Explicit "上传文件" button → native file picker → shared uploader (the
+  // 300MB cap lives in useFileTreeUpload). Uploads land at the tree root.
+  const handlePickFiles = useCallback(() => {
+    uploadInputRef.current?.click();
+  }, []);
+
+  const handleFilesPicked = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const picked = e.target.files;
+      if (picked && picked.length > 0) {
+        void upload.uploadFiles(Array.from(picked), '');
+      }
+      // Reset so picking the same file again still fires onChange.
+      e.target.value = '';
+    },
+    [upload],
+  );
+
   const renderFileIcon = useCallback((filename: string) => {
     const { icon: Icon, color } = getFileIconData(filename);
     return <Icon className={cn(ICON_SIZE_CLASS, color)} />;
@@ -131,6 +150,15 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
       onDragLeave={upload.handleDragLeave}
       onDrop={upload.handleDrop}
     >
+      {/* Hidden input backing the "上传文件" toolbar button */}
+      <input
+        ref={uploadInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFilesPicked}
+      />
+
       {/* Drag overlay */}
       {upload.isDragOver && (
         <div className="absolute inset-0 z-50 flex items-center justify-center border-2 border-dashed border-blue-500 bg-blue-500/10">
@@ -148,6 +176,7 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
         onSearchQueryChange={setSearchQuery}
         onNewFile={() => operations.handleStartCreate('', 'file')}
         onNewFolder={() => operations.handleStartCreate('', 'directory')}
+        onUpload={selectedProject ? handlePickFiles : undefined}
         onRefresh={refreshFiles}
         onCollapseAll={collapseAll}
         loading={loading}

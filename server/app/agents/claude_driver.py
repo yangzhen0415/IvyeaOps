@@ -23,6 +23,8 @@ Stream events (system/init, assistant, user, result) reuse the already-ported
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import json
 import os
@@ -277,7 +279,8 @@ async def query_claude(command: str, options: dict, writer) -> None:
         argv, interactive = _build_argv(options)
         proc = await asyncio.create_subprocess_exec(
             *argv, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT, cwd=cwd, env=_proc_env())
+            stderr=asyncio.subprocess.STDOUT, cwd=cwd, env=_proc_env(),
+            **no_window_kwargs())
     except FileNotFoundError:
         await writer.send(claude_sessions.create_normalized_message(
             kind="error", content="Claude Code is not installed.", sessionId=captured, provider="claude"))

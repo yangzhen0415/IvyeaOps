@@ -13,6 +13,8 @@ instead of a silent wait / a normal assistant bubble, and (c) log throughout.
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import json
 import logging
@@ -112,7 +114,8 @@ async def query_hermes(command: str, options: dict, writer) -> None:
     try:
         proc = await asyncio.create_subprocess_exec(
             *argv, stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT, cwd=cwd, env=_proc_env())
+            stderr=asyncio.subprocess.STDOUT, cwd=cwd, env=_proc_env(),
+            **no_window_kwargs())
     except FileNotFoundError:
         await writer.send(create_normalized_message(
             kind="error", content="Hermes CLI 未安装。", sessionId=session_id, provider=PROVIDER))
@@ -196,7 +199,8 @@ def _export_messages(safe_id: str) -> list:
                             os.path.expanduser("~/.hermes/node/bin"), env.get("PATH", "")])
     try:
         proc = subprocess.run([binary, "sessions", "export", "-", "--session-id", safe_id],
-                              capture_output=True, text=True, timeout=30, env=env)
+                              capture_output=True, text=True, timeout=30, env=env,
+                              **no_window_kwargs())
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
         logger.warning("hermes export --session-id %s failed: %s", safe_id, e)
         return []

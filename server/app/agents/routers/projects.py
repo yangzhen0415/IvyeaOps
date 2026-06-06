@@ -204,6 +204,29 @@ async def create_project(body: CreateProjectBody) -> dict:
     }
 
 
+@router.post("/deep-analysis-workspace")
+async def deep_analysis_workspace() -> dict:
+    """Ensure the dedicated, reusable workspace used by the market-research
+    "深入分析" handoff exists, and return it.
+
+    Idempotent: reuses the existing project (reactivating it if archived)
+    instead of erroring on conflict, so every handoff lands in one tidy place
+    rather than polluting the user's real repos.
+
+    NOTE: this is a fixed, server-controlled path (a dedicated subdir of the
+    service home), not user input, so it deliberately skips the
+    `_validate_workspace_path` guard — that guard rejects anything under home
+    on deployments where home itself is a "system" dir (e.g. /root), which
+    would otherwise make this workspace impossible to create.
+    """
+    path = repos.normalize_project_path(os.path.join(str(Path.home()), "ivyea-deep-analysis"))
+    os.makedirs(path, exist_ok=True)
+    with db_conn() as conn:
+        result = repos.create_project_path(conn, path, "深入分析")
+        item = _project_item(conn, result["project"], include_archived=False)
+    return {"success": True, "project": item}
+
+
 class MigrateStarsBody(BaseModel):
     projectIds: list = []
 

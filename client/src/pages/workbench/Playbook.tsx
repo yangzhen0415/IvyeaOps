@@ -17,6 +17,9 @@ import {
   extractCsvBlock,
   relativeTime,
 } from "../../lib/reportFormat";
+import { getDataSource, setDataSource, dataSourceMeta, type DataSourceId } from "../../lib/dataSource";
+import DataSourcePicker from "../../components/DataSourcePicker";
+import DeepAnalysisPanel, { type DeepAnalysisType } from "../../components/DeepAnalysisPanel";
 
 interface LocalHistoryEntry {
   id: string;
@@ -54,6 +57,31 @@ const EXAMPLE_QUERIES: Record<PlaybookMode, string[]> = {
   asin: ["B08N5WRWNW", "B09G9FPHY6", "B07ZPKN6YR"],
 };
 
+// Deep-analysis presets tailored to a 打法手册 (vs. market research).
+const PLAYBOOK_ANALYSIS_TYPES: readonly DeepAnalysisType[] = [
+  {
+    id: "execute",
+    icon: "▶",
+    label: "落地执行",
+    promptFn: (query, mkt, report) =>
+      `以下是一份关于「${query}」（${mkt} 站）的亚马逊打法手册，请把它拆解成可直接落地的执行方案：\n1. 分阶段排期（备货/上架/广告开启/爬排名/旺季收割的时间线）\n2. 每阶段的具体动作清单与负责事项\n3. 关键检查点与达标指标（KPI）\n4. 预算与库存的分批投入建议\n\n---\n${report}`,
+  },
+  {
+    id: "ads",
+    icon: "▦",
+    label: "广告细化",
+    promptFn: (query, mkt, report) =>
+      `以下是一份关于「${query}」（${mkt} 站）的亚马逊打法手册，请基于其广告策略进一步细化：\n1. 广告活动结构（SP/SB/SD 分层与命名）\n2. 关键词分组与匹配方式、初始竞价与每日预算\n3. 竞品 ASIN 精准拦截清单\n4. 否词与竞价的迭代规则（按 ACOS/出单表现）\n\n---\n${report}`,
+  },
+  {
+    id: "risk",
+    icon: "⚠",
+    label: "风险推演",
+    promptFn: (query, mkt, report) =>
+      `以下是一份关于「${query}」（${mkt} 站）的亚马逊打法手册，请推演执行过程中的风险并给出应对：\n1. 主要风险点（库存/合规/竞争/广告成本失控等）\n2. 每个风险的预警信号与触发阈值\n3. 应对预案与止损动作\n4. 最坏情况下的退出/调整策略\n\n---\n${report}`,
+  },
+];
+
 type Phase = "idle" | "collecting" | "synthesizing" | "done" | "error";
 
 interface ProgressItem {
@@ -68,6 +96,9 @@ export default function Playbook() {
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
   const [marketplace, setMarketplace] = useState("US");
+  const [dataSource, setDataSourceState] = useState<DataSourceId>(getDataSource);
+  const changeDataSource = (id: DataSourceId) => { setDataSource(id); setDataSourceState(id); };
+  const dsReady = dataSourceMeta(dataSource).ready;
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState<ProgressItem | null>(null);
@@ -128,6 +159,7 @@ export default function Playbook() {
 
   const handleSubmit = async () => {
     if (!query.trim() || !price.trim() || phase === "collecting" || phase === "synthesizing") return;
+    if (!dsReady) return;  // selected data source not wired yet — button is disabled
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -342,6 +374,9 @@ export default function Playbook() {
           title="单件成本估算（选填：采购+头程+FBA，用于利润/ACOS 测算）"
         />
 
+        {/* Data source picker (Sorftime active; SIF / 卖家精灵 即将支持) */}
+        <DataSourcePicker value={dataSource} onChange={changeDataSource} disabled={isRunning} />
+
         {/* Marketplace picker */}
         <div className="market-mkt-wrap" ref={pickerRef}>
           <button
@@ -376,13 +411,20 @@ export default function Playbook() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={!query.trim() || !price.trim()}
+            disabled={!query.trim() || !price.trim() || !dsReady}
+            title={!dsReady ? `数据源「${dataSourceMeta(dataSource).name}」即将支持，请切回 Sorftime` : undefined}
             className="market-btn market-btn-submit"
           >
             生成打法
           </button>
         )}
       </div>
+
+      {!dsReady && (
+        <div className="market-error" style={{ marginTop: 8 }}>
+          数据源「{dataSourceMeta(dataSource).name}」即将支持，打法推荐暂仅支持 Sorftime——请在上方切回 <b>Sorftime</b> 后生成。
+        </div>
+      )}
 
       {/* Mobile bottom sheet picker */}
       {pickerOpen && (
@@ -514,6 +556,17 @@ export default function Playbook() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Deep-analysis hand-off (report → native agents session) */}
+      {phase === "done" && report && (
+        <DeepAnalysisPanel
+          types={PLAYBOOK_ANALYSIS_TYPES}
+          query={query}
+          marketplace={marketplace}
+          report={report}
+          slug={query}
+        />
       )}
 
       {/* Empty state */}

@@ -1,79 +1,65 @@
-# IvyeaOps · Windows 部署指南
+# IvyeaOps · Windows 一键安装
 
-一份给 Windows 用户的「从零跑起来」教程。拿到的是 IvyeaOps 的源码压缩包（GitHub Download ZIP，约 4 MB），按下面步骤来即可。整套约 5–10 分钟。
+给 Windows 用户的「双击即装、双击即用」教程。拿到的是 IvyeaOps 源码（GitHub
+Download ZIP，约 4 MB）。整套基本是双击 + 等待，约 5–10 分钟。
 
-> IvyeaOps 是一个自托管的运营工作台，跑在你自己的电脑/服务器上，浏览器访问。数据都在本地。
-
----
-
-## 一、先装两个运行环境（只需一次）
-
-1. **Python 3.10 或更高**
-   - 下载：<https://www.python.org/downloads/>
-   - ⚠️ 安装时**第一屏务必勾选「Add python.exe to PATH」**，再点 Install。
-
-2. **Node.js 18 LTS 或更高**（自带 npm）
-   - 下载：<https://nodejs.org/>（选 LTS 版）
-   - 一路下一步默认安装即可。
-
-装完后，**重新打开**一个 PowerShell 窗口，分别输入下面两行确认（能显示版本号就成功）：
-
-```powershell
-python --version
-node --version
-```
+> IvyeaOps 是自托管的运营工作台，跑在你自己的电脑上，浏览器访问，数据都在本地。
 
 ---
 
-## 二、解压 + 一键安装
+## 一、双击安装
 
-1. 把压缩包**解压**出来，得到一个文件夹（名字大概是 `IvyeaOps-main`）。
-2. 打开这个文件夹，在顶部**地址栏**输入 `powershell` 后回车 —— 会在该目录打开 PowerShell 窗口。
-3. 粘贴运行一键安装脚本：
+1. 把压缩包**解压**出来（得到 `IvyeaOps-main` 之类的文件夹），路径尽量用**英文、无空格**。
+2. 进文件夹，**双击「安装 IvyeaOps.bat」**。
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts\install.ps1
-   ```
+安装脚本会自动完成：
 
-   脚本会自动完成：安装 Python 依赖 → 安装前端依赖并构建 → 生成配置文件 `server\.env`。
-   **过程中会让你输入一个「管理员密码」**（之后登录网页用，自己随便设一个，记住即可）。
+- **自动检测环境**：Python 3.10+ 和 Node 18+。**缺哪个就用 winget 自动装哪个**
+  （Win10/11 自带 winget；装完可能需要按提示重开一次再双击）。
+- 创建独立虚拟环境、装后端依赖、构建前端。
+- 生成配置 `server\.env`：**管理员密码直接回车 = 自动随机生成并显示**（记下来即可）。
+- 会问你**是否顺便安装本地 Hermes Agent + GBrain 知识库**（可选，输 `y` 即装；
+  Hermes 是官方 Windows 原生安装器，GBrain 经 Bun 安装并初始化本地 PGLite 库）。
+  不装也能用——首启向导填个「全局兜底大模型」即可跑全部 AI。
+- 在**桌面创建「IvyeaOps」快捷方式** + 生成「启动 IvyeaOps.bat」。
+- 最后问你「现在就启动吗？」，回车即启动。
 
----
-
-## 三、启动并打开
-
-安装完成后，在同一个 PowerShell 窗口里运行：
-
-```powershell
-cd server
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
-```
-
-看到类似 `Uvicorn running on http://127.0.0.1:8001` 后，浏览器打开：
-
-**http://127.0.0.1:8001**
-
-用刚才设置的管理员密码登录。首次进入会有「首启向导」，引导你填各类 API 密钥（领星 / 生图等都填你自己申请的）。
-
-> 想关闭服务：回到 PowerShell 窗口按 `Ctrl + C`。
-> 下次启动：重新打开 PowerShell，`cd` 到 `IvyeaOps-main\server`，再跑一遍上面那条 `python -m uvicorn ...` 命令即可（不用再装一次）。
+> 不想用自动装环境，也可以自己先装 [Python](https://www.python.org/downloads/)
+> （勾选 *Add to PATH*）和 [Node.js LTS](https://nodejs.org/)，再双击安装。
 
 ---
 
-## 四、常见问题
+## 二、日常使用：双击启动
+
+以后**双击桌面的「IvyeaOps」快捷方式**（或文件夹里的「启动 IvyeaOps.bat」）即可：
+
+- 服务在后台最小化窗口里启动，几秒后**浏览器自动打开** **http://127.0.0.1:8001**。
+- 用安装时的管理员密码登录（用户名 `admin`）。
+- 首次进入有「首启向导」：跟着走，**填一个「全局兜底大模型」**（任意 OpenAI 兼容
+  模型的 Key 即可），全站 AI 功能立刻可用；领星 / 生图等的密钥填你自己申请的。
+
+> **关闭服务**：关掉那个最小化的命令行窗口即可。
+> 这个快捷方式就像启动一个软件——不用再敲任何命令。
+
+---
+
+## 三、常见问题
 
 | 现象 | 解决 |
 |---|---|
-| 提示 `python 不是内部或外部命令` | Python 没加进 PATH。重装 Python，**勾选「Add to PATH」**；或重开 PowerShell 再试。 |
-| 提示 `npm 不是命令` | Node.js 没装好或没重开窗口。重装 Node，重开 PowerShell。 |
-| 运行脚本报 `禁止运行脚本 / ExecutionPolicy` | 用本文给的 `powershell -ExecutionPolicy Bypass -File ...` 完整命令运行即可绕过。 |
-| 提示端口 `8001` 被占用 | 把命令里的 `--port 8001` 换成别的，比如 `--port 8010`，访问地址也相应改成 `:8010`。 |
-| 想重新设管理员密码 | 删除 `server\.env` 文件，重新跑一次 `install.ps1`。 |
+| winget 自动装完 Python/Node 后仍说找不到 | PATH 还没刷新。**关掉窗口，重新双击「安装 IvyeaOps.bat」**即可。 |
+| 没有 winget / 自动安装失败 | 手动装 [Python](https://www.python.org/downloads/)（勾 Add to PATH）和 [Node.js LTS](https://nodejs.org/)，重开后再双击安装。 |
+| 双击 .bat 一闪而过 | 右键 →「以管理员身份运行」，或在文件夹地址栏输 `cmd` 回车后手动运行，看报错信息。 |
+| 端口 `8001` 被占用 | 改 `server\.env` 里的 `IVYEA_OPS_PORT`（同时把 `IVYEA_OPS_ALLOWED_ORIGINS` 的端口一并改），重新启动。 |
+| 想重设管理员密码 | 删掉 `server\.env`，重新双击安装；或登录后在「系统配置 → 账号安全」里改。 |
+| 桌面没出现快捷方式 | 不影响使用，直接双击文件夹里的「启动 IvyeaOps.bat」。 |
 
 ---
 
-## 五、说明
+## 四、说明
 
-- **API 密钥需自己申请填写**（领星、生图等）。在网页「系统配置」里填，密钥只存在你本地。
-- **「服务器终端」板块在 Windows 上用不了**（PTY 限制），其余所有板块（智能体会话、领星 ERP、市场调研、Listing、生图、GBrain 知识库等）都正常。
-- **可选：用 Docker** —— 如果装了 Docker Desktop，也可以不走脚本：在文件夹里 `copy .env.example .env`，然后 `docker compose up -d`，访问 http://localhost:8080。但上面的原生脚本更省事、免装 Docker。
+- **API 密钥都填你自己的**（全局兜底大模型 / 领星 / 生图等），只存在本地。
+- **「服务器终端」板块在 Windows 上用不了**（PTY 限制），其余板块（智能体会话、
+  市场调研、Listing、打法、生图、GBrain 知识库、资讯等）都正常。
+- **可选 Docker**：装了 Docker Desktop 的话，也可 `copy .env.example .env` 后
+  `docker compose up -d`，访问 http://localhost:8080。但上面的双击方式更省事。

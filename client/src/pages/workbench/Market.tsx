@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   streamResearch,
   fetchHistory,
@@ -10,9 +9,10 @@ import {
   type SseEvent,
   type HistoryEntry,
 } from "../../api/market";
-import { fetchAgents, createSession, type AgentInfo } from "../../api/agents";
 import { FLAG_URL, MARKETPLACES } from "../../lib/marketplaces";
-import SheetSelect from "../../components/SheetSelect";
+import { getDataSource, setDataSource, dataSourceMeta, type DataSourceId } from "../../lib/dataSource";
+import DataSourcePicker from "../../components/DataSourcePicker";
+import DeepAnalysisPanel from "../../components/DeepAnalysisPanel";
 
 // Local display shape — uses camelCase; converted from the snake_case API type.
 interface LocalHistoryEntry {
@@ -56,112 +56,6 @@ const ANALYSIS_TYPES = [
   },
 ] as const;
 
-type AnalysisTypeId = typeof ANALYSIS_TYPES[number]["id"];
-
-function truncateReport(report: string, maxChars = 8000): string {
-  if (report.length <= maxChars) return report;
-  return report.slice(0, maxChars) + `\n\n[报告过长，已截取前 ${maxChars} 字符]`;
-}
-
-function DeepAnalysisPanel({
-  query, marketplace, report,
-}: {
-  query: string; marketplace: string; report: string;
-}) {
-  const navigate = useNavigate();
-  const [selectedType, setSelectedType] = useState<AnalysisTypeId>("market");
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-
-  useEffect(() => {
-    fetchAgents()
-      .then((list) => {
-        const enabled = list.filter((a) => a.enabled);
-        setAgents(enabled);
-        if (enabled.length > 0) setSelectedAgent(enabled[0].id);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleStart = async () => {
-    if (!selectedAgent || loading) return;
-    setLoading(true);
-    setErr("");
-    try {
-      const typeConf = ANALYSIS_TYPES.find((t) => t.id === selectedType)!;
-      const mktLabel = marketplace;
-      const prompt = typeConf.promptFn(query, mktLabel, truncateReport(report));
-      const agentDef = agents.find((a) => a.id === selectedAgent);
-      const title = `${typeConf.label}：${query} (${marketplace})`;
-      const sess = await createSession({
-        agent_id: selectedAgent,
-        model: agentDef?.default_model ?? undefined,
-        title,
-      });
-      sessionStorage.setItem(`ivyea-ops-pending-msg-${sess.id}`, prompt);
-      sessionStorage.setItem("ivyea-ops-jump-session", JSON.stringify({
-        sessionId: sess.id,
-        workdir: sess.workdir ?? null,
-      }));
-      navigate("/agents");
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "创建会话失败");
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="market-deep-panel">
-      <div className="market-deep-hd">
-        <span className="market-deep-title">深入分析</span>
-        <span className="market-deep-sub">将报告作为上下文，在智能体会话中继续探讨</span>
-      </div>
-      <div className="market-deep-body">
-        {/* Analysis type selector */}
-        <div className="market-deep-types">
-          {ANALYSIS_TYPES.map((t) => (
-            <button
-              key={t.id}
-              className={"market-deep-type" + (selectedType === t.id ? " active" : "")}
-              onClick={() => setSelectedType(t.id)}
-            >
-              <span className="market-deep-type-icon">{t.icon}</span>
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Agent selector + start */}
-        <div className="market-deep-actions">
-          {agents.length > 0 ? (
-            <SheetSelect
-              className="market-deep-agent-select"
-              value={selectedAgent}
-              onChange={setSelectedAgent}
-              disabled={loading}
-              title="选择智能体"
-              options={agents.map((a) => ({ value: a.id, label: a.display_name || a.id }))}
-            />
-          ) : (
-            <span className="market-deep-no-agent">暂无可用智能体</span>
-          )}
-          <button
-            className="market-deep-start-btn"
-            onClick={handleStart}
-            disabled={loading || !selectedAgent}
-          >
-            {loading ? "创建中…" : "开始分析 →"}
-          </button>
-        </div>
-
-        {err && <div className="market-deep-err">{err}</div>}
-      </div>
-    </div>
-  );
-}
-
 const EXAMPLE_QUERIES: Record<ResearchMode, string[]> = {
   keyword: ["wireless earbuds", "yoga mat", "air fryer", "led desk lamp"],
   asin: ["B08N5WRWNW", "B09G9FPHY6", "B07ZPKN6YR"],
@@ -179,6 +73,9 @@ export default function Market() {
   const [mode, setMode] = useState<ResearchMode>("keyword");
   const [query, setQuery] = useState("");
   const [marketplace, setMarketplace] = useState("US");
+  const [dataSource, setDataSourceState] = useState<DataSourceId>(getDataSource);
+  const changeDataSource = (id: DataSourceId) => { setDataSource(id); setDataSourceState(id); };
+  const dsReady = dataSourceMeta(dataSource).ready;
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState<ProgressItem | null>(null);
@@ -247,6 +144,7 @@ export default function Market() {
 
   const handleSubmit = async () => {
     if (!query.trim() || phase === "collecting" || phase === "synthesizing") return;
+    if (!dsReady) return;  // selected data source not wired yet — button is disabled
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -464,6 +362,9 @@ export default function Market() {
           className="market-query-input"
         />
 
+        {/* Data source picker (Sorftime active; SIF / 卖家精灵 即将支持) */}
+        <DataSourcePicker value={dataSource} onChange={changeDataSource} disabled={isRunning} />
+
         {/* Marketplace picker */}
         <div className="market-mkt-wrap" ref={pickerRef}>
           <button
@@ -497,11 +398,22 @@ export default function Market() {
         {isRunning ? (
           <button onClick={handleStop} className="market-btn market-btn-stop">停止</button>
         ) : (
-          <button onClick={handleSubmit} disabled={!query.trim()} className="market-btn market-btn-submit">
+          <button
+            onClick={handleSubmit}
+            disabled={!query.trim() || !dsReady}
+            title={!dsReady ? `数据源「${dataSourceMeta(dataSource).name}」即将支持，请切回 Sorftime` : undefined}
+            className="market-btn market-btn-submit"
+          >
             生成报告
           </button>
         )}
       </div>
+
+      {!dsReady && (
+        <div className="market-error" style={{ marginTop: 8 }}>
+          数据源「{dataSourceMeta(dataSource).name}」即将支持，市场调研暂仅支持 Sorftime——请在上方切回 <b>Sorftime</b> 后生成报告。
+        </div>
+      )}
 
       {/* Mobile bottom sheet picker */}
       {pickerOpen && (
@@ -671,7 +583,7 @@ export default function Market() {
 
       {/* Deep analysis panel — visible after report is done */}
       {phase === "done" && report && (
-        <DeepAnalysisPanel query={query} marketplace={marketplace} report={report} />
+        <DeepAnalysisPanel types={ANALYSIS_TYPES} query={query} marketplace={marketplace} report={report} />
       )}
 
       {/* History drawer backdrop */}

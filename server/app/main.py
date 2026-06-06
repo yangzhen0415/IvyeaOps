@@ -23,6 +23,7 @@ from app.routers import market as market_router
 from app.routers import playbook as playbook_router
 from app.routers import home as home_router
 from app.routers import assistant as assistant_router
+from app.routers import help as help_router
 from app.routers import hub_settings as hub_settings_router
 from app.routers import projects as projects_router
 from app.routers import git as git_router
@@ -394,6 +395,7 @@ app.include_router(playbook_router.router, prefix="/api/playbook", tags=["playbo
 app.include_router(home_router.router, prefix="/api/home", tags=["home"])
 app.include_router(freight_router.router, prefix="/api/freight", tags=["freight"])
 app.include_router(assistant_router.router, prefix="/api/assistant", tags=["assistant"])
+app.include_router(help_router.router, prefix="/api", tags=["help"])
 
 
 # --- Frontend: serve React SPA (client/dist) ---

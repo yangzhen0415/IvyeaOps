@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -32,7 +31,6 @@ router = APIRouter()
 _NEWS_DIR = settings.data_dir / "news"
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _KEEP_DAYS = 2  # today + yesterday
-_CRON_JOB_ID = "08a40919cd21"  # ai-amazon-daily-digest cron
 
 
 def _news_dir() -> Path:
@@ -156,34 +154,6 @@ def _cleanup_old(keep_days: int = _KEEP_DAYS) -> int:
     return removed
 
 
-def _trigger_cron() -> tuple[bool, str]:
-    """Fire the digest cron job in the background. Best-effort.
-
-    We use ``hermes cron run <id>`` and don't wait — it queues the job for the
-    next gateway scheduler tick (~seconds), so we don't block the HTTP request.
-    A stale job_id returns non-zero which we surface as a friendly message.
-    """
-    if not _CRON_JOB_ID:
-        return False, "cron job id 未配置，无法触发"
-    from app.core import integrations
-    hermes = integrations.hermes_bin()
-    if not hermes:
-        return False, "未找到 hermes CLI（请在 系统配置 → 外部集成 设置 hermes_bin）"
-    try:
-        # Fire-and-forget: use Popen so we return immediately
-        subprocess.Popen(
-            [hermes, "cron", "run", _CRON_JOB_ID],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return True, "任务已触发，约 30 秒后自动完成，届时页面会显示最新 digest"
-    except FileNotFoundError:
-        return False, f"未找到 hermes CLI ({hermes})，无法触发"
-    except Exception as e:  # pragma: no cover
-        return False, f"触发失败: {e}"
-
-
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -224,7 +194,7 @@ def list_news(
                 generated_at=datetime.now().isoformat(timespec="seconds"),
                 items=[],
                 stats={},
-                notes="尚未生成任何 digest。等待 cron 首次跑或点击'立即刷新'。",
+                notes="尚未生成任何 digest。点击「立即刷新」即可现场抓取 RSS 并用 AI 汇总今日资讯。",
             )
         d = dates[0]
 
@@ -250,11 +220,17 @@ def list_news(
 
 
 @router.post("/refresh", response_model=RefreshResponse)
-def trigger_refresh(_user: str = Depends(require_user)) -> RefreshResponse:
-    """Trigger the digest cronjob and clean up stale date files."""
-    # Best-effort cleanup first
+async def trigger_refresh(_user: str = Depends(require_user)) -> RefreshResponse:
+    """Generate today's digest on demand (RSS fetch + standard AI chain).
+
+    Runs in the background so the request returns immediately; the frontend
+    polls ``/list``. Replaces the old hermes ``ai-amazon-daily-digest`` cron, so
+    it works out of the box with no external job or hermes install.
+    """
+    from app.services import news_digest
+
     removed = _cleanup_old()
-    ok, msg = _trigger_cron()
+    msg = news_digest.start_generation()
     if removed:
         msg = f"{msg}（已清理 {removed} 个过期 digest）"
-    return RefreshResponse(triggered=ok, message=msg)
+    return RefreshResponse(triggered=True, message=msg)

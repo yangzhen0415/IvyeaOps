@@ -52,8 +52,12 @@ export type AgentMessage = {
 };
 
 // --- Agents ---------------------------------------------------------------
+// The old agent_hub `GET /api/agents` catalog was decommissioned when the
+// native agents backend took over `/api/agents/*`. The lightweight catalog now
+// lives at `/api/agents/catalog` (server/app/agents/routers/core.py) and only
+// lists agents the native chat view can actually open.
 export async function fetchAgents(): Promise<AgentInfo[]> {
-  const { data } = await api.get<{ agents: AgentInfo[] }>("/agents");
+  const { data } = await api.get<{ agents: AgentInfo[] }>("/agents/catalog");
   return data.agents;
 }
 

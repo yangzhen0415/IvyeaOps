@@ -3,8 +3,27 @@ import { streamReviews, type SseEvent } from "../../../api/deepAnalysis";
 import AnalysisSkeleton from "./AnalysisSkeleton";
 import SheetSelect from "../../../components/SheetSelect";
 import { marketplaceOptions } from "../../../lib/marketplaces";
+import DeepAnalysisPanel, { type DeepAnalysisType } from "../../../components/DeepAnalysisPanel";
 
 const MARKETPLACES = ["US", "UK", "DE", "CA", "JP"];
+
+const REVIEW_ANALYSIS_TYPES: readonly DeepAnalysisType[] = [
+  {
+    id: "improve", icon: "◈", label: "产品改进",
+    promptFn: (asin, mkt, report) =>
+      `以下是 ASIN ${asin}（${mkt} 站）的评论聚类分析：\n\n${report}\n\n请据此给出产品改进方案：\n1. 按频率/严重度排序的痛点改进优先级\n2. 每项改进的可行性与成本预估\n3. 差评转化为卖点的机会\n4. 投入产出最高的前 3 项首批改进`,
+  },
+  {
+    id: "listing", icon: "⬡", label: "Listing 卖点",
+    promptFn: (asin, mkt, report) =>
+      `以下是 ASIN ${asin}（${mkt} 站）的评论聚类分析：\n\n${report}\n\n请把评论洞察转化为 Listing 卖点与文案：\n1. 标题应强调的核心卖点（基于好评高频词）\n2. 五点描述的卖点排序与措辞\n3. 针对差评顾虑的预防性文案\n4. A+/图片应呈现的使用场景`,
+  },
+  {
+    id: "compare", icon: "▦", label: "竞品对比",
+    promptFn: (asin, mkt, report) =>
+      `以下是 ASIN ${asin}（${mkt} 站）的评论聚类分析：\n\n${report}\n\n请基于评论洞察做竞品对比：\n1. 本品在评论中暴露的相对劣势\n2. 用户最在意但市场未满足的需求\n3. 差异化定位建议\n4. 可抢占的细分人群`,
+  },
+];
 
 export default function ReviewClustering() {
   const [asin, setAsin] = useState("");
@@ -81,6 +100,10 @@ export default function ReviewClustering() {
             dangerouslySetInnerHTML={{ __html: simpleMarkdown(output) }}
           />
         </div>
+      )}
+
+      {output && !loading && (
+        <DeepAnalysisPanel types={REVIEW_ANALYSIS_TYPES} query={asin} marketplace={country} report={output} slug={asin} />
       )}
     </div>
   );

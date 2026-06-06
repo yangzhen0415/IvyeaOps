@@ -57,11 +57,26 @@ info "  Python: $($PYTHON --version)"
 info "  Node:   $(node --version)"
 info "  npm:    $(npm --version)"
 
-# ── 2. Python dependencies ────────────────────────────────────────────────────
-info "Installing Python dependencies..."
+# ── 2. Python dependencies (in an isolated venv) ──────────────────────────────
+# A venv avoids polluting system Python and, crucially, sidesteps PEP 668
+# ("externally-managed-environment") which makes `pip install` into the system
+# interpreter fail outright on modern Debian/Ubuntu/Fedora.
+info "Creating Python virtualenv (server/.venv)..."
 cd "$REPO_ROOT/server"
-$PYTHON -m pip install -q -r requirements.txt
-info "  Python deps installed."
+VENV_DIR="$REPO_ROOT/server/.venv"
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+  if ! $PYTHON -m venv "$VENV_DIR" 2>/dev/null; then
+    die "Failed to create a virtualenv. On Debian/Ubuntu install it first:
+       sudo apt install python3-venv
+     then re-run this script."
+  fi
+fi
+VENV_PY="$VENV_DIR/bin/python"
+
+info "Installing Python dependencies..."
+"$VENV_PY" -m pip install -q --upgrade pip
+"$VENV_PY" -m pip install -q -r requirements.txt
+info "  Python deps installed into server/.venv."
 
 # ── 3. Frontend build ────────────────────────────────────────────────────────
 info "Building frontend..."
@@ -79,15 +94,16 @@ if [ -f "$ENV_FILE" ]; then
 else
   info "Generating server/.env..."
 
-  SECRET=$($PYTHON -c "import secrets; print(secrets.token_urlsafe(32))")
+  SECRET=$("$VENV_PY" -c "import secrets; print(secrets.token_urlsafe(32))")
 
   echo ""
   echo "  Set an admin password for the web UI."
   echo "  (Input is hidden)"
-  PW_HASH=$($PYTHON -m app.core.hashpw 2>/dev/null) || {
+  # Use the venv interpreter — bcrypt is installed there, not in system Python.
+  PW_HASH=$("$VENV_PY" -m app.core.hashpw 2>/dev/null) || {
     # Fallback: prompt manually then hash inline
     read -rsp "  Admin password: " PW; echo ""
-    PW_HASH=$($PYTHON -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt()).decode())" "$PW")
+    PW_HASH=$("$VENV_PY" -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt()).decode())" "$PW")
   }
 
   # Detect public hostname (best-effort)
@@ -122,6 +138,58 @@ fi
 cd "$REPO_ROOT"
 mkdir -p data
 
+# ── 5.5 Optional: local AI Agent (Hermes) + knowledge base (GBrain) ───────────
+# Both are optional — IvyeaOps works with just the global fallback model. They
+# unlock the local-tool / MCP-driven features. Official one-line installers.
+echo ""
+printf "  顺便安装本地 AI Agent (Hermes) + 知识库 (GBrain)？联网较慢，可跳过 (y/N) "
+read -r ANS || ANS=""
+if [ "$ANS" = "y" ] || [ "$ANS" = "Y" ]; then
+  info "安装 Hermes Agent（官方安装器）..."
+  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash || \
+    warn "Hermes 安装失败，可稍后手动重试：curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"
+
+  info "安装 Bun + GBrain..."
+  if ! command -v bun &>/dev/null && [ ! -x "$HOME/.bun/bin/bun" ]; then
+    curl -fsSL https://bun.sh/install | bash || warn "Bun 安装失败"
+  fi
+  BUN="$HOME/.bun/bin/bun"; [ -x "$BUN" ] || BUN="$(command -v bun || true)"
+  if [ -n "$BUN" ] && [ -x "$BUN" ]; then
+    "$BUN" install -g github:garrytan/gbrain || warn "GBrain 安装失败"
+    GBRAIN="$HOME/.bun/bin/gbrain"
+    if [ -x "$GBRAIN" ]; then
+      mkdir -p "$HOME/brain"
+      ( cd "$HOME/brain" && "$GBRAIN" init --pglite >/dev/null 2>&1 || true )
+      info "  GBrain 安装完成（本地 PGLite，已初始化 ~/brain）。"
+    fi
+  else
+    warn "未找到 bun，GBrain 跳过。可手动：bun install -g github:garrytan/gbrain"
+  fi
+  info "  安装路径会被 IvyeaOps 自动发现；如未识别，可在「系统配置 → 智能体」里填路径。"
+fi
+
+# ── 5.6 Optional: Listing 采集服务 (amazon-image-workflow, via Docker) ─────────
+# Self-contained docker-compose (bundles Postgres). Free scraping (curl/puppeteer),
+# no API keys. Skip if Docker is absent — Listing still works (manual + AI),
+# just without auto-scrape.
+if [ -f "$REPO_ROOT/amazon-image-workflow/docker-compose.yml" ]; then
+  if command -v docker &>/dev/null && (docker compose version &>/dev/null || command -v docker-compose &>/dev/null); then
+    echo ""
+    printf "  启动 Listing 采集服务（amazon-image-workflow，Docker，免密钥）？(y/N) "
+    read -r ANS2 || ANS2=""
+    if [ "$ANS2" = "y" ] || [ "$ANS2" = "Y" ]; then
+      info "启动采集服务（首次会构建镜像，较慢）..."
+      ( cd "$REPO_ROOT/amazon-image-workflow" && (docker compose up -d --build || docker-compose up -d --build) ) \
+        && info "  采集服务已启动（:3001）。IvyeaOps 默认已指向它。" \
+        || warn "采集服务启动失败，可稍后手动：cd amazon-image-workflow && docker compose up -d --build"
+    fi
+  else
+    warn "未检测到 Docker —— Listing 采集服务需要 Docker。装上 Docker 后："
+    warn "  cd amazon-image-workflow && docker compose up -d --build"
+    warn "（不装也行：Listing 其余功能照常，仅无法自动抓竞品。）"
+  fi
+fi
+
 # ── 6. Done ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -130,10 +198,14 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo ""
 echo "  Start the server:"
 echo "    cd $REPO_ROOT/server"
-echo "    $PYTHON -m uvicorn app.main:app --host 127.0.0.1 --port 8001"
+echo "    .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001"
 echo ""
 echo "  Then open http://127.0.0.1:8001 in your browser."
+echo "  A first-run wizard will guide you through agents + API keys."
+echo ""
+echo "  TIP: to work out of the box without a local agent CLI, set a"
+echo "       「全局兜底大模型」 in 系统配置 (any OpenAI-compatible model + key)."
 echo ""
 echo "  For production deploy (nginx + systemd + certbot):"
-echo "    See docs/INSTALL.md"
+echo "    See docs/INSTALL.md  (set PYTHON_BIN=server/.venv/bin/python)"
 echo ""

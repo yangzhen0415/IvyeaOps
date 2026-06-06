@@ -4,6 +4,7 @@ import { logout } from "../api/client";
 import { useAuth } from "../App";
 import Terminal from "../pages/workbench/Terminal";
 import Agents from "../pages/workbench/Agents";
+import ManualModal from "../components/ManualModal";
 
 type NavItem = {
   to: string;
@@ -217,6 +218,7 @@ export default function MainLayout() {
     if (location.pathname === "/agents") setCcuiMounted(true);
   }, [location.pathname]);
   const [clock, setClock] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   // Clock
   useEffect(() => {
@@ -339,6 +341,13 @@ export default function MainLayout() {
             <div className="tb-time">{clock}</div>
             <button
               className="tbtn"
+              onClick={() => setManualOpen(true)}
+              title="使用手册"
+            >
+              📖
+            </button>
+            <button
+              className="tbtn"
               onClick={() => {
                 if ((window as any).OpsApp?.reload) {
                   (window as any).OpsApp.reload();
@@ -400,6 +409,7 @@ export default function MainLayout() {
           {location.pathname !== "/terminal" && location.pathname !== "/agents" && <Outlet />}
         </div>
       </div>
+      {manualOpen && <ManualModal onClose={() => setManualOpen(false)} />}
     </div>
   );
 }

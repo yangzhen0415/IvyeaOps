@@ -15,36 +15,23 @@ from pydantic import BaseModel
 
 from app.core import hub_settings as _hs
 from app.core.security import require_user
-from app.services.ai_synthesis_service import _apimart_base, _apimart_key, _deepseek_key
+from app.services.ai_synthesis_service import (
+    ASSISTANT_PROVIDER_BASE,
+    _apimart_base,
+    _apimart_key,
+    _deepseek_key,
+    assistant_text_cfg,
+)
 
 router = APIRouter()
 
 
-# OpenAI-compatible base URLs per provider (for the user-configurable
-# AI-chat panel). Anthropic-style providers handled separately.
-_CHAT_PROVIDER_BASE = {
-    "deepseek":   "https://api.deepseek.com",
-    "openai":     "https://api.openai.com/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "groq":       "https://api.groq.com/openai/v1",
-    "together":   "https://api.together.xyz/v1",
-    "xiaomi":     "https://token-plan-sgp.xiaomimimo.com/v1",
-    "kimi":       "https://api.kimi.com/coding/v1",
-}
-
-
+# The global fallback model slot is the same one this AI 问答 panel drives, so
+# its config reader and provider→base map live canonically in
+# ai_synthesis_service (imported above) — no duplicate maps to drift.
 def _assistant_cfg() -> dict:
     """Return the user-configured AI-chat model, or {} to use the default chain."""
-    cfg = _hs.load()
-    provider = (cfg.get("assistant_provider") or "").strip()
-    if not provider:
-        return {}
-    return {
-        "provider": provider,
-        "model":    (cfg.get("assistant_model") or "").strip(),
-        "api_key":  (cfg.get("assistant_api_key") or "").strip(),
-        "base_url": (cfg.get("assistant_base_url") or "").strip(),
-    }
+    return assistant_text_cfg()
 
 
 class Msg(BaseModel):
@@ -149,7 +136,7 @@ async def _configured_chat(cfg: dict, messages: List[Msg]) -> AsyncGenerator[str
                             yield t
         return
     # OpenAI-compatible (deepseek/openai/openrouter/groq/together/xiaomi/kimi/custom)
-    base = cfg["base_url"] or _CHAT_PROVIDER_BASE.get(provider, "")
+    base = cfg["base_url"] or ASSISTANT_PROVIDER_BASE.get(provider, "")
     if not base:
         raise RuntimeError(f"{provider} 需要填写 Base URL")
     payload = {

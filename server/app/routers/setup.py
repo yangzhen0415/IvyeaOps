@@ -17,6 +17,8 @@ Design notes
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import os
 import shutil
@@ -131,6 +133,7 @@ async def _install_stream(agent: str) -> AsyncGenerator[str, None]:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,
+            **no_window_kwargs(),
         )
         assert proc.stdout is not None
         async for raw in proc.stdout:

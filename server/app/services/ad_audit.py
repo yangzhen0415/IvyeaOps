@@ -30,6 +30,8 @@ Design
 """
 from __future__ import annotations
 
+from app.core.proc import no_window_kwargs
+
 import asyncio
 import csv
 import hashlib
@@ -860,6 +862,7 @@ async def _run_agent(job: AdJob) -> None:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=child_env,
+            **no_window_kwargs(),
         )
     except Exception as spawn_err:
         job.status = "failed"
