@@ -2045,7 +2045,7 @@ body::after{
 .pulse-summary-sep{width:1px;background:var(--b);flex-shrink:0;align-self:stretch}
 /* Insight panels */
 .pulse-insights{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex-shrink:0}
-.pulse-insight{background:var(--bg1);border:1px solid var(--b);border-radius:7px;overflow:hidden;min-height:120px}
+.pulse-insight{background:var(--bg1);border:1px solid var(--b);border-radius:7px;overflow:hidden;min-height:120px;min-width:0}
 .pulse-insight-hd{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--b)}
 .pulse-insight-icon{font-size:12px;font-weight:700}
 .pulse-insight-title{font-size:11px;font-weight:600;color:var(--t2);flex:1}
@@ -2071,7 +2071,7 @@ body::after{
 /* Grid */
 .pulse-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 /* Card */
-.pulse-card{background:var(--bg1);border:1px solid var(--b);border-left:3px solid var(--b);border-radius:6px;padding:11px 12px 9px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s,box-shadow .15s}
+.pulse-card{background:var(--bg1);border:1px solid var(--b);border-left:3px solid var(--b);border-radius:6px;padding:11px 12px 9px;display:flex;flex-direction:column;gap:8px;min-width:0;transition:border-color .15s,box-shadow .15s}
 .pulse-card:hover{border-color:var(--b2);box-shadow:0 2px 14px rgba(0,0,0,.22)}
 .pulse-card-hd{display:flex;align-items:center;gap:5px;min-width:0}
 .pulse-kw{font-size:11.5px;font-weight:600;color:var(--t);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.02em}
@@ -2209,7 +2209,7 @@ body::after{
 .kx-actions{display:flex;gap:6px;flex-wrap:wrap}
 .kx-hint{font-size:10.5px;color:var(--t3)}
 .kx-list{display:flex;flex-direction:column;gap:2px;font-size:10.5px}
-.kx-row{display:grid;grid-template-columns:1fr 42px 44px 40px 48px 52px;gap:4px;align-items:center;padding:3px 2px;border-bottom:1px solid var(--b)}
+.kx-row{display:grid;grid-template-columns:minmax(0,1fr) 42px 44px 40px 48px 52px;gap:4px;align-items:center;padding:3px 2px;border-bottom:1px solid var(--b)}
 .kx-row.kx-head{color:var(--t3);font-size:9.5px;border-bottom:1px solid var(--b2)}
 .kx-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kx-kw{color:var(--t2)}
