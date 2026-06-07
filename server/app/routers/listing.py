@@ -403,13 +403,14 @@ async def _call_ai(prompt: str, max_tokens: int = 2000, web_search: bool = True)
     # prefer the fast HTTP text models over the heavyweight agent CLIs. A big
     # 8k-token generation on hermes (a tool-using CLI, 600s timeout) can block
     # this synchronous request long past any client/proxy patience → "Network
-    # Error". HTTP models answer in seconds; CLIs stay as a last-resort fallback.
-    order = ["assistant", "deepseek", "apimart", "hermes", "codex", "claude"]
+    # Error". HTTP text models answer in seconds; CLIs stay as a last-resort
+    # fallback. NOTE: apimart is IMAGE-GEN ONLY (no text) — never in this chain.
+    order = ["assistant", "deepseek", "hermes", "codex", "claude"]
     try:
         _provider, text = await ai_synthesis_service.run_text_chain(task_prompt, order=order)
         return text
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"AI 调用失败（全局兜底 / DeepSeek / Apimart / Hermes / Codex / Claude 均不可用）：{e}")
+        raise HTTPException(502, f"AI 调用失败（全局兜底 / DeepSeek / Hermes / Codex / Claude 均不可用）：{e}")
 
 
 async def _review_single_prompt(

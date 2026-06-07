@@ -27,7 +27,7 @@ _DEFAULTS: Dict[str, Any] = {
     # Comma-separated vision-AI fallback chain (for skills that accept file/image inputs).
     # Tried in order; first provider with a configured key wins.
     # Valid values: apimart (Claude Vision), openai (GPT-4o), assistant (custom provider)
-    "vision_ai_providers": "apimart,openai,assistant",
+    "vision_ai_providers": "openai,assistant",
     # 资讯板块 RSS 源（留空用内置默认源）。每行一个：url | 来源名 | 分类
     # 分类 ∈ {ai_industry, amazon_seller}，省略默认 ai_industry。
     "news_feeds": "",

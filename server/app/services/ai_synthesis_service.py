@@ -92,11 +92,13 @@ def _deepseek_key() -> str:
 # "assistant" == the global fallback text model (the AI 问答 slot, assistant_*).
 # It is a user-configured OpenAI-compatible / anthropic HTTP endpoint, so it is
 # safe for non-admin users and acts as the standard chain's fallback step.
-_VALID_TEXT_PROVIDERS = ("hermes", "codex", "claude", "apimart", "deepseek", "assistant")
+# NOTE: apimart is IMAGE-GEN ONLY (no text/chat endpoint) — it must NOT appear
+# in any text chain; calling its /v1/messages returns 403.
+_VALID_TEXT_PROVIDERS = ("hermes", "codex", "claude", "deepseek", "assistant")
 
 
 # Providers safe for non-admin users: pure HTTP APIs, no local CLI / shell / MCP.
-_HTTP_ONLY_PROVIDERS = ("deepseek", "apimart", "assistant")
+_HTTP_ONLY_PROVIDERS = ("deepseek", "assistant")
 
 
 def _text_provider_chain() -> list[str]:
@@ -127,7 +129,7 @@ def _text_provider_chain() -> list[str]:
         cu = current_user.get()
         if cu is not None and cu.get("role") != "admin":
             http = [p for p in chain if p in _HTTP_ONLY_PROVIDERS]
-            return http or ["assistant", "deepseek", "apimart"]
+            return http or ["assistant", "deepseek"]
     except Exception:
         pass
     return chain
@@ -1046,17 +1048,18 @@ def _vision_provider_chain() -> list[str]:
     have a key configured in the current environment."""
     from app.core import hub_settings
     raw = str(hub_settings.get("vision_ai_providers") or "").strip()
-    valid = ("apimart", "openai", "assistant")
-    order = [p.strip().lower() for p in (raw or "apimart,openai,assistant").split(",")
+    # apimart is image-GEN only (no vision/analysis), so it is NOT a vision
+    # provider — image understanding needs a real vision model (openai / the
+    # vision-capable global fallback).
+    valid = ("openai", "assistant")
+    order = [p.strip().lower() for p in (raw or "openai,assistant").split(",")
              if p.strip().lower() in valid]
-    order = list(dict.fromkeys(order)) or ["apimart", "openai", "assistant"]
+    order = list(dict.fromkeys(order)) or ["openai", "assistant"]
 
     # Only keep providers that have credentials configured right now.
     available = []
     for p in order:
-        if p == "apimart" and _apimart_key():
-            available.append(p)
-        elif p == "openai" and _openai_key():
+        if p == "openai" and _openai_key():
             available.append(p)
         elif p == "assistant" and _assistant_vision_cfg():
             available.append(p)
