@@ -1,6 +1,6 @@
 # 生产环境部署
 
-假设环境为 Linux + Python 3.10+ + Node 18+ + nginx + certbot。
+假设环境为 Linux + Python 3.9+ + Node 18+ + nginx + certbot。
 全文把 `ops.example.com` 替换成你自己的域名。
 
 > 提示：本地快速试用直接跑 `bash scripts/install.sh`（自动建虚拟环境、装依赖、构建前端、生成 `.env`）即可，下面是手动的生产部署流程。

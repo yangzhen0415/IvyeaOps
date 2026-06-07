@@ -103,7 +103,7 @@ python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 浏览器打开 **http://127.0.0.1:8001**，首启向导会引导你完成智能体检测与 API 密钥设置。
 
 > macOS 与 Linux 命令完全一致（同为 Unix）：原生脚本和 `docker compose up -d` 都可用，
-> PTY 终端也正常工作。需先有 Python 3.10+ 与 Node 18+（可用 Homebrew 安装）。
+> PTY 终端也正常工作。需先有 Python 3.9+ 与 Node 18+（可用 Homebrew 安装）。
 
 ### Windows（双击即装、双击即用）
 
@@ -125,7 +125,7 @@ python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 
 | | Linux | Windows |
 |---|---|---|
-| Python | 3.10+ | 3.10+ |
+| Python | 3.9+ | 3.9+ |
 | Node.js | 18+ | 18+ |
 | npm | 随 Node 安装 | 随 Node 安装 |
 

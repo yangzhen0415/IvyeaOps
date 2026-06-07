@@ -1,7 +1,7 @@
 # IvyeaOps 一键安装（Windows / PowerShell 5.1+）
 #
 # 做的事：
-#   1. 自动检测 Python 3.10+ 和 Node 18+；缺失则用 winget 自动安装
+#   1. 自动检测 Python 3.9+ 和 Node 18+；缺失则用 winget 自动安装
 #   2. 创建独立虚拟环境 server\.venv 并安装后端依赖
 #   3. 构建前端
 #   4. 生成 server\.env（随机密钥 + 管理员密码哈希；密码留空则自动生成并显示）
@@ -36,7 +36,7 @@ function Find-Python {
         try {
             $ver = & $bin --version 2>&1
             if ($ver -match "Python (\d+)\.(\d+)") {
-                if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 10) { return $bin }
+                if ([int]$Matches[1] -gt 3 -or ([int]$Matches[1] -eq 3 -and [int]$Matches[2] -ge 9)) { return $bin }
             }
         } catch {}
     }
@@ -59,13 +59,13 @@ $HasWinget = Test-Cmd "winget"
 $Python = Find-Python
 if (-not $Python) {
     if ($HasWinget) {
-        Write-Warn "未检测到 Python 3.10+，正在用 winget 自动安装（约 1-2 分钟）..."
+        Write-Warn "未检测到 Python 3.9+，正在用 winget 自动安装（约 1-2 分钟）..."
         winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements
         Refresh-Path
         $Python = Find-Python
     }
     if (-not $Python) {
-        Write-Fail "需要 Python 3.10+。请从 https://www.python.org/ 安装（勾选 Add to PATH），重开终端后重试。"
+        Write-Fail "需要 Python 3.9+。请从 https://www.python.org/ 安装（勾选 Add to PATH），重开终端后重试。"
     }
 }
 

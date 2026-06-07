@@ -14,3 +14,9 @@ psd-tools==1.10.2
 Pillow>=11.0.0
 python-multipart>=0.0.9
 pyte>=0.8.2
+# AES for 领星 OpenAPI signing (app/services/lingxing_openapi.py).
+cryptography>=42.0.0
+# Lets pydantic evaluate `X | None` annotations on Python 3.9 (the default on
+# RHEL9/CentOS9/Rocky/Debian 11/Ubuntu 20.04). Without it a fresh venv crashes
+# at startup with "Unable to evaluate type annotation 'str | None'".
+eval_type_backport>=0.2.0; python_version < "3.10"

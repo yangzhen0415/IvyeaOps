@@ -2,7 +2,7 @@
 # IvyeaOps one-shot install script for Linux
 #
 # What it does:
-#   1. Checks Python 3.10+ and Node 18+ are available
+#   1. Checks Python 3.9+ and Node 18+ are available
 #   2. Installs Python dependencies (pip)
 #   3. Builds the React frontend (npm)
 #   4. Generates server/.env with a random secret and an admin password hash
@@ -34,13 +34,13 @@ for bin in python3 python; do
     ver=$("$bin" -c "import sys; print(sys.version_info[:2])")
     major=$("$bin" -c "import sys; print(sys.version_info.major)")
     minor=$("$bin" -c "import sys; print(sys.version_info.minor)")
-    if [ "$major" -ge 3 ] && [ "$minor" -ge 10 ]; then
+    if [ "$major" -gt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -ge 9 ]; }; then
       PYTHON="$bin"
       break
     fi
   fi
 done
-[ -n "$PYTHON" ] || die "Python 3.10+ is required. Install it with your package manager and re-run."
+[ -n "$PYTHON" ] || die "Python 3.9+ is required. Install it with your package manager and re-run."
 
 NODE=""
 if command -v node &>/dev/null; then
@@ -97,14 +97,17 @@ else
   SECRET=$("$VENV_PY" -c "import secrets; print(secrets.token_urlsafe(32))")
 
   echo ""
-  echo "  Set an admin password for the web UI."
-  echo "  (Input is hidden)"
-  # Use the venv interpreter — bcrypt is installed there, not in system Python.
-  PW_HASH=$("$VENV_PY" -m app.core.hashpw 2>/dev/null) || {
-    # Fallback: prompt manually then hash inline
-    read -rsp "  Admin password: " PW; echo ""
-    PW_HASH=$("$VENV_PY" -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt()).decode())" "$PW")
-  }
+  echo "  Set an admin password for the web UI (press Enter to auto-generate one)."
+  # Hash directly with the venv's bcrypt and capture ONLY the bare hash.
+  # (Do NOT pipe `python -m app.core.hashpw` here — that helper prints
+  # human-facing instructions, which would corrupt .env.)
+  read -rsp "  Admin password: " PW; echo ""
+  GENERATED_PW=""
+  if [ -z "$PW" ]; then
+    PW=$("$VENV_PY" -c "import secrets; print(secrets.token_urlsafe(9))")
+    GENERATED_PW="$PW"
+  fi
+  PW_HASH=$("$VENV_PY" -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt()).decode())" "$PW")
 
   # Detect public hostname (best-effort)
   HOSTNAME_GUESS=""
@@ -132,6 +135,11 @@ IVYEA_OPS_ALLOWED_ORIGINS=http://127.0.0.1:8001
 EOF
 
   info "  server/.env created."
+  if [ -n "$GENERATED_PW" ]; then
+    echo ""
+    warn "★ 已自动生成管理员密码：${GENERATED_PW}"
+    warn "  用户名 admin，请记下来；可在网页「系统配置 → 账号安全」里修改。"
+  fi
 fi
 
 # ── 5. Ensure data directory ──────────────────────────────────────────────────
