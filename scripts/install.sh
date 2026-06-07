@@ -77,6 +77,10 @@ if [ -n "$_use_cn" ]; then
   NPM_MIRROR="--registry=https://registry.npmmirror.com"
   export PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
   export npm_config_registry="https://registry.npmmirror.com"
+  # uv (used by the optional Hermes installer) honours these — speeds up its
+  # Python dependency downloads too.
+  export UV_DEFAULT_INDEX="https://pypi.tuna.tsinghua.edu.cn/simple"
+  export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
 fi
 
 # ── 2. Python dependencies (in an isolated venv) ──────────────────────────────

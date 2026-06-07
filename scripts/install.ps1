@@ -100,6 +100,9 @@ if ($useCN) {
     $env:PIP_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
     $NpmMirror = @("--registry=https://registry.npmmirror.com")
     $env:npm_config_registry = "https://registry.npmmirror.com"
+    # uv (used by the optional Hermes installer) honours these.
+    $env:UV_DEFAULT_INDEX = "https://pypi.tuna.tsinghua.edu.cn/simple"
+    $env:UV_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
 }
 
 # ── 2. 后端依赖（独立虚拟环境）────────────────────────────────────────────────
