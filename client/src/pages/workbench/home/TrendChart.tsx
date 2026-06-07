@@ -40,6 +40,27 @@ const sn = (v: number) => {
   return String(Math.round(v));
 };
 
+// Value/position of a series at an arbitrary x by linear interpolation between
+// its surrounding points (so the tooltip/dot match the continuously-drawn line
+// even on days where this series has no exact datapoint). Returns null only when
+// x falls outside the series' own x-range — there it genuinely has no data.
+function interpAt(raw: { x: number; y: number; v: number }[], x: number) {
+  if (raw.length === 0) return null;
+  const pts = [...raw].sort((a, b) => a.x - b.x);
+  const n = pts.length;
+  if (x < pts[0].x - 0.5 || x > pts[n - 1].x + 0.5) return null;
+  if (x <= pts[0].x) return { v: pts[0].v, y: pts[0].y };
+  if (x >= pts[n - 1].x) return { v: pts[n - 1].v, y: pts[n - 1].y };
+  for (let i = 0; i < n - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    if (x >= a.x && x <= b.x) {
+      const t = b.x === a.x ? 0 : (x - a.x) / (b.x - a.x);
+      return { v: a.v + (b.v - a.v) * t, y: a.y + (b.y - a.y) * t };
+    }
+  }
+  return { v: pts[n - 1].v, y: pts[n - 1].y };
+}
+
 export default function TrendChart({ series, height = 200 }: { series: TrendSeries[]; height?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(560);
@@ -169,8 +190,8 @@ export default function TrendChart({ series, height = 200 }: { series: TrendSeri
             <g>
               <line x1={hoverX} x2={hoverX} y1={T} y2={T + PH} stroke="rgba(255,255,255,.25)" strokeWidth="1" strokeDasharray="3 3" />
               {rendered.map(({ s, si, pts }) => {
-                const pt = pts.find(p => p.day === hoverDay);
-                return pt ? <circle key={si} cx={pt.x} cy={pt.y} r="3.4" fill={s.color} stroke="var(--bg2)" strokeWidth="1.5" /> : null;
+                const ip = interpAt(pts, hoverX);
+                return ip ? <circle key={si} cx={hoverX} cy={ip.y} r="3.4" fill={s.color} stroke="var(--bg2)" strokeWidth="1.5" /> : null;
               })}
             </g>
           )}
@@ -194,13 +215,13 @@ export default function TrendChart({ series, height = 200 }: { series: TrendSeri
       {hover != null && hoverDay && (
         <div className="trendc-tip" style={{ left: `${tipLeftPct}%`, transform: `translateX(${tipLeftPct > 60 ? "-100%" : "0"})` }}>
           <div className="trendc-tip-date">{hoverDay}{weekday(hoverDay) ? ` 周${weekday(hoverDay)}` : ""}</div>
-          {series.map(s => {
-            const p = s.points.find(pp => pp.day === hoverDay);
+          {rendered.map(({ s, si, pts }) => {
+            const ip = interpAt(pts, hoverX);
             return (
-              <div key={s.name} className="trendc-tip-row">
+              <div key={si} className="trendc-tip-row">
                 <i className="lc-dot" style={{ background: s.color }} />
                 <span className="trendc-tip-name">{s.name}</span>
-                <b className="trendc-tip-val">{p ? (s.fmt ? s.fmt(p.value) : sn(p.value)) : "—"}</b>
+                <b className="trendc-tip-val">{ip ? (s.fmt ? s.fmt(ip.v) : sn(ip.v)) : "—"}</b>
               </div>
             );
           })}

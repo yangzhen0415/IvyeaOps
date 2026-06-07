@@ -2069,7 +2069,7 @@ body::after{
 /* Section label */
 .pulse-section-label{font-size:10px;color:var(--t3);letter-spacing:.08em;font-weight:600;padding:2px 0 0;flex-shrink:0}
 /* Grid */
-.pulse-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.pulse-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}
 /* Card */
 .pulse-card{background:var(--bg1);border:1px solid var(--b);border-left:3px solid var(--b);border-radius:6px;padding:11px 12px 9px;display:flex;flex-direction:column;gap:8px;min-width:0;transition:border-color .15s,box-shadow .15s}
 .pulse-card:hover{border-color:var(--b2);box-shadow:0 2px 14px rgba(0,0,0,.22)}
@@ -2208,7 +2208,7 @@ body::after{
 .kx-panel{margin-top:8px;border-top:1px dashed var(--b);padding-top:8px;display:flex;flex-direction:column;gap:7px}
 .kx-actions{display:flex;gap:6px;flex-wrap:wrap}
 .kx-hint{font-size:10.5px;color:var(--t3)}
-.kx-list{display:flex;flex-direction:column;gap:2px;font-size:10.5px}
+.kx-list{display:flex;flex-direction:column;gap:2px;font-size:10.5px;overflow-x:auto}
 .kx-row{display:grid;grid-template-columns:minmax(0,1fr) 42px 44px 40px 48px 52px;gap:4px;align-items:center;padding:3px 2px;border-bottom:1px solid var(--b)}
 .kx-row.kx-head{color:var(--t3);font-size:9.5px;border-bottom:1px solid var(--b2)}
 .kx-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
