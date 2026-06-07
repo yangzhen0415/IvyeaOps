@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title IvyeaOps 安装
 cd /d "%~dp0"

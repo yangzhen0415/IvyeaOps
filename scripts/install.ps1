@@ -1,4 +1,4 @@
-# IvyeaOps 一键安装（Windows / PowerShell 5.1+）
+﻿# IvyeaOps 一键安装（Windows / PowerShell 5.1+）
 #
 # 做的事：
 #   1. 自动检测 Python 3.9+ 和 Node 18+；缺失则用 winget 自动安装
