@@ -274,9 +274,9 @@ body::after{
 /* --- MAIN --- */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .topbar{height:40px;border-bottom:1px solid var(--b);display:flex;align-items:center;padding:0 16px;gap:12px;background:var(--bg2);flex-shrink:0}
-.tb-path{font-size:11px;color:var(--t3)}
+.tb-path{font-size:11px;color:var(--t3);flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tb-path b{color:var(--t2);font-weight:400}
-.tb-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tb-r{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .tbtn{font-size:10px;color:var(--t3);cursor:pointer;padding:3px 8px;border:1px solid var(--b);border-radius:var(--r);background:transparent;font-family:var(--font);transition:all .1s;white-space:nowrap}
 .tbtn:hover{color:var(--t);border-color:var(--b2)}
 .tbtn:disabled{opacity:.4;cursor:not-allowed}
@@ -317,7 +317,9 @@ body::after{
   .g4{grid-template-columns:1fr 1fr}
   .tabs{overflow-x:auto;white-space:nowrap}
   .tab{padding:6px 10px;flex-shrink:0}
-  .topbar{padding:0 10px}
+  .topbar{padding:0 10px;gap:8px}
+  .topbar .tb-time{display:none}      /* 手机端隐藏时钟，给板块名/按钮腾地方 */
+  .tb-r{gap:5px}
   .met{padding:8px 10px}
   .mv{font-size:15px}
   .card{padding:10px 11px}
