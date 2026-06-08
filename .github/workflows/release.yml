@@ -23,16 +23,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20 LTS
+      - name: Setup Node 22 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build frontend
         working-directory: client
         env:
           NODE_ENV: development   # 确保装 devDependencies，且不用会触发 npm 崩溃的 --include=dev flag
         run: |
+          # 锁定已验证可用的 npm。Node 20 自带的 npm 10.8.x / Node 24 的 npm 11.x 存在
+          # "Exit handler never called!" 崩溃（崩却假成功、留下残缺 node_modules）；10.9.7 正常。
+          npm i -g npm@10.9.7
           echo "node $(node -v), npm $(npm -v)"
           # npm 的 "Exit handler never called" bug 会崩却假装成功(exit 0)、留下残缺 node_modules，
           # 后续 tsc 便爆出一堆 "Cannot find module 'react'"。这里不信任退出码，实际校验关键依赖，
