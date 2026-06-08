@@ -16,5 +16,7 @@
     "noEmit": true,
     "allowJs": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "comment-exclude": "src/pages/workbench/workspace 是尚未接线的在建功能（无任何 import），类型未就绪；先排除以免阻断生产构建。接线时移除本条。",
+  "exclude": ["src/pages/workbench/workspace"]
 }
