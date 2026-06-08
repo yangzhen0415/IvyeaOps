@@ -67,7 +67,8 @@ jobs:
             ./ "$STAGE/"
           test -f "$STAGE/client/dist/index.html"   # 确保预构建前端进了包
           ( cd staging && zip -rq "../IvyeaOps-${TAG}.zip" IvyeaOps )
-          ls -lh "IvyeaOps-${TAG}.zip"
+          cp "IvyeaOps-${TAG}.zip" "IvyeaOps.zip"   # 版本无关的稳定名，供 releases/latest/download 一键下载
+          ls -lh "IvyeaOps-${TAG}.zip" "IvyeaOps.zip"
 
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2
@@ -75,14 +76,22 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
-          files: IvyeaOps-${{ steps.tag.outputs.tag }}.zip
+          files: |
+            IvyeaOps-${{ steps.tag.outputs.tag }}.zip
+            IvyeaOps.zip
           body: |
             **预构建发行包** —— 已包含编译好的前端 `client/dist`，下载即用、无需在本机构建。
+            安装脚本检测到已自带前端，会**跳过 Node 安装与前端构建**（含小内存机的 swap 步骤），
+            只配置 Python 后端，从而避开绝大多数「前端构建失败 / npm 报错 / 内存不足卡死」的坑。
 
-            ### 普通 / Windows 用户（推荐，无需安装 Node）
-            下载下方的 `IvyeaOps-${{ steps.tag.outputs.tag }}.zip` → 解压 → 双击「安装 IvyeaOps.bat」。
-            安装脚本检测到已自带前端，会**跳过 Node 安装与前端构建**，只配置 Python 后端，
-            从而避开绝大多数「前端构建失败 / npm 报错 / 内存不足」的坑。
+            ### Windows 用户（无需安装 Node）
+            下载下方 `IvyeaOps.zip` → 解压 → 双击「安装 IvyeaOps.bat」。
+
+            ### Linux / macOS（尤其小内存服务器，免构建免 swap）
+            ```bash
+            curl -L https://github.com/Hector-xue/IvyeaOps/releases/latest/download/IvyeaOps.zip -o IvyeaOps.zip
+            unzip IvyeaOps.zip && cd IvyeaOps && bash scripts/install.sh
+            ```
 
             ### 开发者
-            也可 `git clone` 源码自行构建（需 Node 18+）：`bash scripts/install.sh` 或双击「安装 IvyeaOps.bat」。
+            也可 `git clone` 源码自行构建（需 Node 18+ 与 ≥2G 内存）。
