@@ -179,7 +179,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel pyinstaller
           python -m pip install -r server/requirements.txt
-          pyinstaller --noconfirm --clean --onefile --name IvyeaOpsServer --paths server server/ivyeaops_server.py
+          pyinstaller --noconfirm --clean --onefile --windowed --icon client/public/favicon.ico --name IvyeaOpsServer --paths server server/ivyeaops_server.py
           if (!(Test-Path dist/IvyeaOpsServer.exe)) { throw "IvyeaOpsServer.exe missing" }
 
       - name: Resolve tag

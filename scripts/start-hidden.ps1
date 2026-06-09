@@ -59,13 +59,23 @@ if (Test-Path $PidFile) {
 
 # Start hidden: no console window stays in the taskbar. Logs are written to logs\.
 if (Test-Path $ServerExe) {
-    $proc = Start-Process `
-        -FilePath $ServerExe `
-        -WorkingDirectory $RepoRoot `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput $OutLog `
-        -RedirectStandardError $ErrLog `
-        -PassThru
+    $oldOpenBrowser = $env:IVYEA_OPS_SERVER_OPEN_BROWSER
+    $env:IVYEA_OPS_SERVER_OPEN_BROWSER = "0"
+    try {
+        $proc = Start-Process `
+            -FilePath $ServerExe `
+            -WorkingDirectory $RepoRoot `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $OutLog `
+            -RedirectStandardError $ErrLog `
+            -PassThru
+    } finally {
+        if ($null -eq $oldOpenBrowser) {
+            Remove-Item Env:\IVYEA_OPS_SERVER_OPEN_BROWSER -ErrorAction SilentlyContinue
+        } else {
+            $env:IVYEA_OPS_SERVER_OPEN_BROWSER = $oldOpenBrowser
+        }
+    }
 } else {
     $proc = Start-Process `
         -FilePath $VenvPy `
