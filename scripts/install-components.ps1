@@ -109,7 +109,7 @@ function Install-NpmPackage($commandName, $packageName) {
     Refresh-Path
     $npm = Get-Command npm -ErrorAction SilentlyContinue
     if (-not $npm) { throw "npm not found. Cannot install $commandName." }
-    Write-Info "Installing/updating $commandName: $packageName"
+    Write-Info "Installing/updating ${commandName}: $packageName"
     & $npm.Source install -g $packageName
     if ($LASTEXITCODE -ne 0) { throw "npm install -g $packageName failed." }
     Refresh-Path
