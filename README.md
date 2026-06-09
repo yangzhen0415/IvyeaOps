@@ -194,13 +194,20 @@ bash scripts/update.sh
 > 等价于 `git pull` + 刷新依赖 + 重建前端；`.env`/`data/` 原样保留。完成后按提示重启服务
 > （systemd：`sudo systemctl restart ivyea-ops`；脚本启动：Ctrl+C 后 `bash scripts/start.sh`）。
 
-**Windows** —— 在仓库目录里：
+**Windows x64 免 Python 包** —— 直接双击：
+
+```text
+更新 IvyeaOps Windows x64.bat
+```
+
+它会自动停止后台服务、下载最新版 `IvyeaOps-Windows-x64.zip`、覆盖程序文件、保留
+`data\` / `logs\` / `server\.env`，最后刷新快捷方式并重新启动。用户不需要手动备份或搬目录。
+
+**Windows 源码 / 普通包（git clone 安装）** —— 在仓库目录里：
 ```powershell
 git pull
 ```
-然后**重新双击「安装 IvyeaOps.bat」**（可选安装项一路回车/选 N 即可；`.env` 已存在会自动跳过、不覆盖），完成后重新双击「启动 IvyeaOps.bat」。
-
-> 用 ZIP 装的没有 `.git`、无法 `git pull`：重新下载最新 ZIP 覆盖**代码**即可，但**千万别动 `server/.env` 和 `data/`**（把它们先备份出来再覆盖最稳）。建议改用 `git clone` 安装，以后更新一条命令。
+然后重新双击「安装 IvyeaOps.bat」（可选安装项一路回车/选 N 即可；`.env` 已存在会自动跳过、不覆盖），完成后重新双击「启动 IvyeaOps.bat」。
 
 ---
 
