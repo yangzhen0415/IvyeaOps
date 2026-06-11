@@ -35,6 +35,87 @@ def _imgflow_base() -> str:
     return str(url).rstrip("/") + "/api"
 
 
+_COMPOSE_FILES = ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml")
+
+
+def _imgflow_dir() -> Optional[Path]:
+    """Locate the amazon-image-workflow project dir (the Docker 采集服务). Honours
+    the optional `imgflow_dir` setting, else looks for it next to / under the
+    IvyeaOps install root. Returns None when not found."""
+    from app.core import hub_settings
+    candidates: list[Path] = []
+    configured = hub_settings.get("imgflow_dir")
+    if configured:
+        candidates.append(Path(str(configured)))
+    root = Path(__file__).resolve().parents[3]  # IvyeaOps install root
+    candidates += [root / "amazon-image-workflow", root.parent / "amazon-image-workflow"]
+    for d in candidates:
+        try:
+            if d.is_dir() and any((d / f).exists() for f in _COMPOSE_FILES):
+                return d
+        except Exception:
+            continue
+    return None
+
+
+@router.get("/imgflow/status")
+async def imgflow_status(_u: str = Depends(require_user)):
+    """Report whether the 采集服务 is reachable, its dir is found, and Docker exists
+    — drives the 'start collection service' button in the UI."""
+    import shutil
+    d = _imgflow_dir()
+    reachable = False
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            r = await client.get(_imgflow_base())
+            reachable = r.status_code < 500
+    except Exception:
+        reachable = False
+    return {
+        "reachable": reachable,
+        "dir": str(d) if d else "",
+        "docker_available": bool(shutil.which("docker")),
+    }
+
+
+@router.post("/imgflow/start")
+def imgflow_start(_u: str = Depends(require_user)):
+    """Best-effort 'one-click' start of the local Docker 采集服务:
+    runs `docker compose up -d --build` in the workflow dir, detached, logging to
+    data/imgflow-start.log (the --build can take minutes, so we never block)."""
+    import shutil
+    import subprocess
+    from app.core.proc import no_window_kwargs
+
+    d = _imgflow_dir()
+    if not d:
+        raise HTTPException(400, "未找到 amazon-image-workflow 目录。请把该项目放在 IvyeaOps "
+                                 "同级目录，或在「系统配置」设置 imgflow_dir 指向它，再试。")
+    docker = shutil.which("docker")
+    if not docker:
+        raise HTTPException(400, "未检测到 Docker。请先安装并启动 Docker Desktop，再点此按钮。")
+
+    log_path = settings.data_dir / "imgflow-start.log"
+    try:
+        logf = open(log_path, "ab")
+        kw = dict(no_window_kwargs())
+        if os.name == "nt":  # detach on Windows so stopping the app won't kill the build
+            kw["creationflags"] = kw.get("creationflags", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        else:
+            kw["start_new_session"] = True
+        subprocess.Popen([docker, "compose", "up", "-d", "--build"],
+                         cwd=str(d), stdout=logf, stderr=subprocess.STDOUT, **kw)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"启动采集服务失败：{exc}") from exc
+    return {
+        "ok": True,
+        "dir": str(d),
+        "log": str(log_path),
+        "detail": "采集服务正在后台启动（docker compose up -d --build），首次构建可能需要几分钟。"
+                  "完成后重新「采集ASIN数据」即可拿到完整主图组。",
+    }
+
+
 def _apimart_key() -> str:
     """Return configured Apimart key, empty when unset. Image-generation
     callers should surface a clear 'not configured' error rather than

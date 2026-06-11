@@ -341,6 +341,17 @@ def sync_gbrain_embedding(provider: str, model: str, api_key: str) -> None:
     bare_model = full_model.split(":", 1)[1]
     dims = _EMBED_MODEL_DIMS.get(bare_model)
 
+    # config.json only exists after the local DB has been initialised. If it's
+    # missing (e.g. GBrain freshly installed, DB not yet inited), initialise it
+    # first — otherwise picking an embedding provider in 系统配置 would silently do
+    # nothing and the 知识库 board would keep showing "未配置 Embedding".
+    if not _GBRAIN_CONFIG.exists():
+        try:
+            from app.services import gbrain_service as _gb
+            _gb.ensure_db_ready()
+        except Exception:
+            pass
+
     if _GBRAIN_CONFIG.exists():
         try:
             cfg = json.loads(_GBRAIN_CONFIG.read_text())
@@ -352,6 +363,11 @@ def sync_gbrain_embedding(provider: str, model: str, api_key: str) -> None:
         tmp = _GBRAIN_CONFIG.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(cfg, indent=2))
         tmp.replace(_GBRAIN_CONFIG)
+    else:
+        import logging
+        logging.getLogger(__name__).warning(
+            "sync_gbrain_embedding: ~/.gbrain/config.json 不存在且无法初始化，"
+            "embedding_model 未写入（GBrain 可能未正确安装）。")
 
     # 3. Migrate the vector column dimension if the model needs it.
     if dims:

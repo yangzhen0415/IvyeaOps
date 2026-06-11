@@ -230,6 +230,36 @@ def _ollama_models(base: str = "http://127.0.0.1:11434") -> list[str]:
     return []
 
 
+def ensure_db_ready() -> dict[str, Any]:
+    """Make sure GBrain's local DB is initialised. Returns
+    ``{db_ready, version_compatible, hint}``. Idempotent; cheap once configured.
+    Auto-runs ``gbrain init --pglite`` when the DB is missing, and detects the
+    incompatible (database_url-only) version so callers can offer a reinstall
+    instead of surfacing the raw "No database URL" error."""
+    res: dict[str, Any] = {"db_ready": False, "version_compatible": True, "hint": ""}
+    if _db_configured():
+        res["db_ready"] = True
+        return res
+    out = ""
+    try:
+        Path(_brain_root()).mkdir(parents=True, exist_ok=True)
+        proc = subprocess.run(
+            [_gbrain_bin(), "init", "--pglite"], cwd=str(_brain_root()), env=_env(),
+            text=True, capture_output=True, timeout=120, **no_window_kwargs())
+        out = (proc.stdout + proc.stderr).lower()
+    except Exception as e:  # noqa: BLE001
+        out = str(e).lower()
+    if _db_configured():
+        res["db_ready"] = True
+    elif any(k in out for k in ("database_url", "--supabase", "--url")):
+        res["version_compatible"] = False
+        res["hint"] = ("检测到不兼容的 GBrain 版本（要求 database_url）。请在"
+                       "「系统配置 → 系统状态」点 GBrain 的「重装/修复」重装到兼容版本。")
+    else:
+        res["hint"] = "GBrain 本地库初始化失败，可重试或重装 GBrain。"
+    return res
+
+
 def ensure_ready() -> dict[str, Any]:
     """Self-heal the knowledge base on board load, so the user doesn't have to
     hand-configure anything:
@@ -247,26 +277,14 @@ def ensure_ready() -> dict[str, Any]:
                               "version_compatible": True, "actions": actions, "hint": ""}
 
     # 1. Database
-    if not _db_configured():
-        out = ""
-        try:
-            Path(_brain_root()).mkdir(parents=True, exist_ok=True)
-            proc = subprocess.run(
-                [_gbrain_bin(), "init", "--pglite"], cwd=str(_brain_root()), env=_env(),
-                text=True, capture_output=True, timeout=120, **no_window_kwargs())
-            out = (proc.stdout + proc.stderr).lower()
-        except Exception as e:  # noqa: BLE001
-            out = str(e).lower()
-        if _db_configured():
-            actions.append("已自动初始化本地知识库（PGLite）")
-        else:
-            if any(k in out for k in ("database_url", "--supabase", "--url")):
-                result["version_compatible"] = False
-                result["hint"] = ("检测到不兼容的 GBrain 版本（要求 database_url）。请在"
-                                  "「系统配置 → 系统状态」点 GBrain 的「安装/修复」重装到兼容版本。")
-            else:
-                result["hint"] = "GBrain 本地库初始化失败，可重试或重装 GBrain。"
-            return result
+    was_configured = _db_configured()
+    db = ensure_db_ready()
+    if not db["db_ready"]:
+        result["version_compatible"] = db["version_compatible"]
+        result["hint"] = db["hint"]
+        return result
+    if not was_configured:
+        actions.append("已自动初始化本地知识库（PGLite）")
     result["db_ready"] = True
 
     # 2. Embedding via Ollama

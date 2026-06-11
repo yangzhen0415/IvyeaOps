@@ -18,6 +18,15 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RepoRoot
 
+# Always record the run to logs\update.log. The updater often runs hidden (from
+# the .bat / in-app button), so without this a failure leaves no trace and is
+# impossible to diagnose. Best-effort: never let logging break the update.
+try {
+    $LogDir = Join-Path $RepoRoot "logs"
+    if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Force -Path $LogDir | Out-Null }
+    Start-Transcript -Path (Join-Path $LogDir "update.log") -Append -Force | Out-Null
+} catch {}
+
 function Write-Info($msg) { Write-Host "[IvyeaOps] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "[IvyeaOps] WARN: $msg" -ForegroundColor Yellow }
 function Write-Fail($msg) {
@@ -117,4 +126,5 @@ try {
     Write-Fail $_
 } finally {
     try { Remove-Item -Recurse -Force $TempRoot -ErrorAction SilentlyContinue } catch {}
+    try { Stop-Transcript | Out-Null } catch {}
 }

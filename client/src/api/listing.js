@@ -5,6 +5,8 @@ export const createProject = async (asin, marketplace) => (await api.post("/proj
 export const getProject = async (id) => (await api.get(`/projects/${id}`)).data;
 export const deleteProject = async (id) => api.delete(`/projects/${id}`);
 export const scrapeProject = async (id) => (await api.post(`/projects/${id}/scrape`)).data;
+export const imgflowStatus = async () => (await api.get("/imgflow/status")).data;
+export const imgflowStart = async () => (await api.post("/imgflow/start")).data;
 export const saveProductInfo = async (id, info) => (await api.post(`/projects/${id}/product-info`, info)).data;
 export const aiAnalyze = async (id) => (await api.post(`/projects/${id}/ai-analyze`)).data;
 export const generateCopy = async (id, type, context) => (await api.post(`/projects/${id}/copy`, { type, context })).data;

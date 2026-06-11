@@ -517,14 +517,19 @@ function HealthPanel() {
               <Dot ok={item?.ok} loading={loading || (!health && !err)} />
               <span className="hs-health-label">{row.label}</span>
               <span className="hs-health-detail" title={full}>{shortDetail(full)}</span>
-              {row.install && !item?.ok && (
+              {row.install && (
                 <button
                   className="hs-refresh-btn"
                   style={{ padding: "2px 8px", fontSize: 10 }}
                   disabled={!!installing}
+                  // Always offer this, even when detected as installed: a broken /
+                  // incompatible build (e.g. an old GBrain v0.35) reports "ok" yet
+                  // still needs a clean reinstall, so hiding the button would trap
+                  // the user with no way to repair it.
                   onClick={() => installComponent(row.install!)}
+                  title={item?.ok ? "已安装，可重装/修复以替换损坏或不兼容的版本" : undefined}
                 >
-                  {installing === row.install ? "安装中…" : "安装/修复"}
+                  {installing === row.install ? "安装中…" : (item?.ok ? "重装/修复" : "安装/修复")}
                 </button>
               )}
             </div>

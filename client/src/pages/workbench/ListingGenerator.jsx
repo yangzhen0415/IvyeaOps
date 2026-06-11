@@ -19,6 +19,7 @@ import {
   getReferenceImages,
   getTemplates,
   listProjects,
+  imgflowStart,
   reviewImagePrompt,
   saveImageSlots,
   saveProductInfo,
@@ -161,6 +162,8 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
   const [newAsin, setNewAsin] = useState("");
   const [newMkt, setNewMkt] = useState("US");
   const [copyResult, setCopyResult] = useState({});
+  const [imgflowStarting, setImgflowStarting] = useState(false);
+  const [imgflowMsg, setImgflowMsg] = useState("");
   const [analysisResult, setAnalysisResult] = useState("");
   const [productInfo, setProductInfo] = useState(EMPTY_PRODUCT_INFO);
 
@@ -333,6 +336,20 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
       notify("error", "采集失败: " + messageOf(e));
     }
     setLoading("");
+  }
+
+  async function handleStartImgflow() {
+    setImgflowStarting(true);
+    setImgflowMsg("");
+    try {
+      const r = await imgflowStart();
+      setImgflowMsg(r.detail || "采集服务正在后台启动…");
+      notify("success", "采集服务已在后台启动（首次构建可能需要几分钟）");
+    } catch (e) {
+      setImgflowMsg("");
+      notify("error", "启动采集服务失败: " + messageOf(e));
+    }
+    setImgflowStarting(false);
   }
 
   async function handleSaveInfo() {
@@ -889,8 +906,18 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
         {scrapeData.scrape_source === "sorftime" && (
           <div style={{ fontSize: 10, padding: 10, background: "rgba(245,158,11,.10)", border: "1px solid rgba(245,158,11,.35)", borderRadius: 4, lineHeight: 1.6, color: "var(--t2)" }}>
             <strong>只采到 1 张白底主图？</strong> 完整主图组（全部 7 张）需要本地「采集服务」（amazon-image-workflow，Docker）。
-            当前未检测到它，已回退到 sorftime（只返回 1 张主图）。启用方式：
-            <code style={{ display: "block", marginTop: 4, color: "var(--t)" }}>cd amazon-image-workflow &amp;&amp; docker compose up -d --build</code>
+            当前未检测到它，已回退到 sorftime（只返回 1 张主图）。
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+              <button className="btn" disabled={imgflowStarting} onClick={handleStartImgflow} style={{ fontSize: 10, padding: "3px 10px" }}>
+                {imgflowStarting ? "启动中…" : "一键启动采集服务"}
+              </button>
+              <span style={{ color: "var(--t3)" }}>需已安装 Docker；首次构建较慢。</span>
+            </div>
+            {imgflowMsg && <div style={{ marginTop: 6, color: "var(--t2)" }}>{imgflowMsg}</div>}
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", color: "var(--t3)" }}>或手动启动</summary>
+              <code style={{ display: "block", marginTop: 4, color: "var(--t)" }}>cd amazon-image-workflow &amp;&amp; docker compose up -d --build</code>
+            </details>
             启动后重新「采集ASIN数据」即可拿到完整主图组。
           </div>
         )}
