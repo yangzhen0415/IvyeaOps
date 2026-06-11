@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from "react
 import { useSearchParams } from "react-router-dom";
 import { listSkills, SkillMeta } from "../../api/skill";
 import SheetSelect from "../../components/SheetSelect";
+// SkillBrowse owns the sks-* styles. Import them here (not only in SkillStudio) so
+// the component is styled wherever it's mounted — e.g. embedded in the Skill 中心
+// (/skill-hub → SkillManage), where SkillStudio never mounts. Without this the
+// 管理 tab rendered completely unstyled ("没 UI"). CSS imports dedupe, so this is
+// safe even when SkillStudio also imports the same file.
+import "../../styles/skill-studio.css";
 
 // SkillEditor brings in CodeMirror (~240KB gzip) — keep it off the list page.
 const SkillEditor = lazy(() => import("./SkillEditor"));
