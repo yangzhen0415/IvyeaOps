@@ -65,7 +65,7 @@ def _claude_bin() -> str:
         pass
     try:
         from app.core import integrations
-        search = ":".join([p for p in integrations.extra_path_dirs() if p]
+        search = os.pathsep.join([p for p in integrations.extra_path_dirs() if p]
                           + [os.environ.get("PATH", "")])
     except Exception:
         search = os.environ.get("PATH", "")
@@ -80,7 +80,7 @@ def _proc_env() -> dict:
     except Exception:
         extra = []
     cur = env.get("PATH", "")
-    env["PATH"] = ":".join([p for p in extra if p] + ([cur] if cur else []))
+    env["PATH"] = os.pathsep.join([p for p in extra if p] + ([cur] if cur else []))
     env.setdefault("HOME", os.path.expanduser("~"))
     # claude refuses bypassPermissions/--dangerously-skip-permissions as root
     # unless it believes it's sandboxed; ops runs as root, so opt in (matches

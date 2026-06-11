@@ -40,7 +40,7 @@ def _project_path(project_id: str) -> str:
 
 
 def _which(bin_name: str) -> Optional[str]:
-    search = ":".join([os.path.expanduser("~/.hermes/node/bin"),
+    search = os.pathsep.join([os.path.expanduser("~/.hermes/node/bin"),
                        os.path.expanduser("~/.local/bin"), os.environ.get("PATH", "")])
     return shutil.which(bin_name, path=search)
 

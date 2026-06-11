@@ -110,7 +110,7 @@ def _hermes_env() -> dict[str, str]:
     from app.core import integrations
     env = os.environ.copy()
     extra_paths = [*integrations.extra_path_dirs(), "/usr/local/bin", "/usr/bin"]
-    env["PATH"] = ":".join(extra_paths + [env.get("PATH", "")])
+    env["PATH"] = os.pathsep.join(extra_paths + [env.get("PATH", "")])
     env.setdefault("PYTHONUNBUFFERED", "1")
     env.setdefault("HERMES_ACCEPT_HOOKS", "1")
     return env

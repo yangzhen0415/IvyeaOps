@@ -258,7 +258,7 @@ def synchronize_codex(since: Optional[float] = None) -> int:
 
 
 def _hermes_bin() -> str:
-    search = ":".join([os.path.expanduser("~/.local/bin"),
+    search = os.pathsep.join([os.path.expanduser("~/.local/bin"),
                        os.path.expanduser("~/.hermes/node/bin"), os.environ.get("PATH", "")])
     return shutil.which("hermes", path=search) or "hermes"
 
@@ -269,7 +269,7 @@ def synchronize_hermes() -> int:
     `hermes sessions export`. Best-effort: any failure returns 0."""
     binary = _hermes_bin()
     env = os.environ.copy()
-    env["PATH"] = ":".join([os.path.expanduser("~/.local/bin"),
+    env["PATH"] = os.pathsep.join([os.path.expanduser("~/.local/bin"),
                             os.path.expanduser("~/.hermes/node/bin"), env.get("PATH", "")])
     try:
         proc = subprocess.run([binary, "sessions", "export", "-", "--source", "cli"],

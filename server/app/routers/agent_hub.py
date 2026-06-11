@@ -341,7 +341,7 @@ async def _chat_oneshot(
     from app.core import integrations
     extra_paths = [bin_dir, *integrations.extra_path_dirs()]
     cur_path = env.get("PATH", "")
-    env["PATH"] = ":".join([p for p in extra_paths if p] + ([cur_path] if cur_path else []))
+    env["PATH"] = os.pathsep.join([p for p in extra_paths if p] + ([cur_path] if cur_path else []))
     cwd = sess.get("workdir") if sess.get("workdir") and _os.path.isdir(sess["workdir"]) else _os.path.expanduser("~")
 
     try:
@@ -465,7 +465,7 @@ async def _spawn_chat_proc(
     from app.core import integrations
     extra_paths = [bin_dir, *integrations.extra_path_dirs()]
     cur_path = env.get("PATH", "")
-    env["PATH"] = ":".join([p for p in extra_paths if p] + ([cur_path] if cur_path else []))
+    env["PATH"] = os.pathsep.join([p for p in extra_paths if p] + ([cur_path] if cur_path else []))
     cwd = sess.get("workdir") if sess.get("workdir") and os.path.isdir(sess["workdir"]) else os.path.expanduser("~")
     return await asyncio.create_subprocess_exec(
         *argv,

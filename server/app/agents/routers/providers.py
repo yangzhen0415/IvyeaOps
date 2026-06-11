@@ -115,7 +115,7 @@ def _ok(data) -> dict:
 
 
 def _which(bin_name: str) -> bool:
-    search = ":".join([os.path.expanduser("~/.hermes/node/bin"), os.environ.get("PATH", "")])
+    search = os.pathsep.join([os.path.expanduser("~/.hermes/node/bin"), os.environ.get("PATH", "")])
     return shutil.which(bin_name, path=search) is not None
 
 

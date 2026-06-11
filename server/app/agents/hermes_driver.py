@@ -48,7 +48,7 @@ def _hermes_bin() -> str:
             return override
     except Exception:
         pass
-    search = ":".join([os.path.expanduser("~/.local/bin"),
+    search = os.pathsep.join([os.path.expanduser("~/.local/bin"),
                        os.path.expanduser("~/.hermes/node/bin"),
                        os.environ.get("PATH", "")])
     return shutil.which("hermes", path=search) or "hermes"
@@ -57,8 +57,19 @@ def _hermes_bin() -> str:
 def _proc_env() -> dict:
     env = os.environ.copy()
     extra = [os.path.expanduser("~/.local/bin"), os.path.expanduser("~/.hermes/node/bin")]
-    env["PATH"] = ":".join(extra + [env.get("PATH", "")])
+    env["PATH"] = os.pathsep.join(extra + [env.get("PATH", "")])
     env.setdefault("HOME", os.path.expanduser("~"))
+    # Inject the API keys IvyeaOps wrote to ~/.hermes/.env into the subprocess env.
+    # Hermes may not auto-load that file (especially on Windows), so without this the
+    # model configured under 系统配置 has no key and silently fails — while the same
+    # model "works" from a CLI terminal where the key is exported in the shell.
+    try:
+        from app.services.hermes_config_sync import _read_env_file
+        for k, v in _read_env_file().items():
+            if v:
+                env[k] = v
+    except Exception:
+        pass
     return env
 
 
@@ -251,7 +262,7 @@ def _export_messages(safe_id: str) -> list:
     file): export the single session and read its messages."""
     binary = _hermes_bin()
     env = os.environ.copy()
-    env["PATH"] = ":".join([os.path.expanduser("~/.local/bin"),
+    env["PATH"] = os.pathsep.join([os.path.expanduser("~/.local/bin"),
                             os.path.expanduser("~/.hermes/node/bin"), env.get("PATH", "")])
     try:
         proc = subprocess.run([binary, "sessions", "export", "-", "--session-id", safe_id],

@@ -33,7 +33,7 @@ _DEFAULT_MODEL = "gpt-5.5"
 
 
 def _codex_bin() -> str:
-    search = ":".join([os.path.expanduser("~/.hermes/node/bin"), os.environ.get("PATH", "")])
+    search = os.pathsep.join([os.path.expanduser("~/.hermes/node/bin"), os.environ.get("PATH", "")])
     return shutil.which("codex", path=search) or "codex"
 
 
