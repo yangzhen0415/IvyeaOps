@@ -76,10 +76,13 @@ async def session_messages(
         provider = session["provider"]
         if provider == "claude":
             return claude_sessions.fetch_history(conn, sid, limit=limit, offset=offset)
+        codex_jsonl = session["jsonl_path"] if provider == "codex" else None
     # hermes transcripts come from its own session store (read outside the DB conn).
     if provider == "hermes":
         return hermes_driver.read_history(sid)
-    # codex transcript reading (rollout format) not ported yet.
+    if provider == "codex":
+        from app.agents import codex_driver
+        return codex_driver.read_history(codex_jsonl, sid)
     return {"messages": [], "total": 0, "hasMore": False, "offset": offset, "limit": limit}
 
 

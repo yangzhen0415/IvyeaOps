@@ -32,6 +32,50 @@ _CONTEXT_WINDOW = 272000
 _DEFAULT_MODEL = "gpt-5.5"
 
 
+def read_history(jsonl_path: Optional[str], session_id: str) -> dict:
+    """Read a codex rollout (~/.codex/sessions/**/rollout-*.jsonl) into the agents
+    message shape, so clicking a codex session shows its transcript (previously this
+    returned empty — "看不到对话内容"). User text comes from event_msg/user_message
+    (the actually-typed text, not the auto-injected <environment_context>), assistant
+    text from response_item/message(role=assistant). Empty result if unreadable."""
+    empty = {"messages": [], "total": 0, "hasMore": False, "offset": 0, "limit": None}
+    if not jsonl_path or not os.path.isfile(jsonl_path):
+        return empty
+    out: list[dict] = []
+    try:
+        with open(jsonl_path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except (ValueError, TypeError):
+                    continue
+                payload = ev.get("payload") or {}
+                if not isinstance(payload, dict):
+                    continue
+                etype = ev.get("type")
+                if etype == "event_msg" and payload.get("type") == "user_message":
+                    text = (payload.get("message") or "").strip()
+                    if text:
+                        out.append(create_normalized_message(
+                            kind="text", role="user", content=text,
+                            sessionId=session_id, provider=PROVIDER))
+                elif (etype == "response_item" and payload.get("type") == "message"
+                      and payload.get("role") == "assistant"):
+                    parts = [b["text"] for b in (payload.get("content") or [])
+                             if isinstance(b, dict) and isinstance(b.get("text"), str)]
+                    text = "".join(parts).strip()
+                    if text:
+                        out.append(create_normalized_message(
+                            kind="text", role="assistant", content=text,
+                            sessionId=session_id, provider=PROVIDER))
+    except OSError:
+        return empty
+    return {"messages": out, "total": len(out), "hasMore": False, "offset": 0, "limit": None}
+
+
 def _codex_bin() -> str:
     search = os.pathsep.join([os.path.expanduser("~/.hermes/node/bin"), os.environ.get("PATH", "")])
     return shutil.which("codex", path=search) or "codex"
