@@ -10,8 +10,12 @@ from app.core.security import require_user
 
 router = APIRouter()
 
-# Repo root: app/routers/help.py → parents[3] == repo root.
-_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs"
+# docs/ ships next to the install. runtime_root() resolves to the exe's dir when
+# frozen (Windows x64) and the repo root from source — __file__.parents[3] would
+# point inside the PyInstaller _MEIPASS temp dir for the exe (docs not embedded).
+from app.core.version import runtime_root
+
+_DOCS_DIR = runtime_root() / "docs"
 
 # Whitelisted docs (name → filename + display title). Order = display order.
 _DOCS: list[tuple[str, str, str]] = [

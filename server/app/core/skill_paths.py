@@ -17,6 +17,7 @@ the defaults.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 
@@ -44,10 +45,21 @@ SETTINGS_FILE: Path = STUDIO_ROOT / "settings.json"
 AUDIT_LOG_FILE: Path = STUDIO_ROOT / "audit.log"
 
 
-# Skills bundled with the repo (shipped so fresh installs have the Amazon
+# Skills bundled with the install (shipped so fresh installs have the Amazon
 # audit / listing skills the boards depend on, even without a pre-existing
-# Hermes skill library). server/app/core/skill_paths.py → parents[3] = repo root.
-BUNDLED_SKILLS: Path = (Path(__file__).resolve().parents[3] / "skills").resolve()
+# Hermes skill library).
+#
+# Source layout: server/app/core/skill_paths.py → parents[3] = repo root.
+# Frozen exe (Windows x64 / PyInstaller --onefile): __file__ lives inside the
+# temp _MEIPASS extraction dir, so parents[3] is wrong — the skills are shipped
+# next to IvyeaOpsServer.exe instead. Resolve relative to the exe when frozen.
+def _bundled_skills_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return (Path(sys.executable).resolve().parent / "skills")
+    return (Path(__file__).resolve().parents[3] / "skills")
+
+
+BUNDLED_SKILLS: Path = _bundled_skills_root().resolve()
 
 
 def seed_bundled_skills() -> int:

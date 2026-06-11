@@ -204,6 +204,13 @@ jobs:
           Copy-Item -Recurse client/dist "$stage/client/dist"
           Copy-Item -Recurse client/public "$stage/client/public"
           Copy-Item -Recurse docs "$stage/docs"
+          # Skills are seeded into ~/.hermes/skills on startup (ASIN/广告审计、Listing
+          # 板块依赖它们);the frozen exe reads them from next to itself, so they MUST
+          # ship in the bundle — onefile PyInstaller does not embed them.
+          Copy-Item -Recurse skills "$stage/skills"
+          # amazon-image-workflow = the Docker 采集服务 (完整主图组). Ship the source so
+          # the listing board's 「一键启动采集服务」 can find + `docker compose up` it.
+          if (Test-Path amazon-image-workflow) { Copy-Item -Recurse amazon-image-workflow "$stage/amazon-image-workflow" }
           Copy-Item scripts/stop-hidden.ps1 "$stage/scripts/stop-hidden.ps1"
           Copy-Item scripts/install-components.ps1 "$stage/scripts/install-components.ps1"
           Copy-Item scripts/update-exe.ps1 "$stage/scripts/update-exe.ps1"

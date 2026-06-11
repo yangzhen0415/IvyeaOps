@@ -180,10 +180,10 @@ class ManualTicket(BaseModel):
 @router.get("/help")
 async def help_doc() -> Dict[str, Any]:
     """The Chinese user guide (markdown) for in-app rendering."""
-    from pathlib import Path
-    p = Path(__file__).resolve().parents[3] / "docs" / "lingxing-erp-guide.md"
+    from app.core.version import runtime_root
+    p = runtime_root() / "docs" / "lingxing-erp-guide.md"
     try:
-        return {"markdown": p.read_text("utf-8")}
+        return {"markdown": p.read_text(encoding="utf-8")}
     except Exception:
         return {"markdown": "# 文档未找到\n请见仓库 docs/lingxing-erp-guide.md"}
 

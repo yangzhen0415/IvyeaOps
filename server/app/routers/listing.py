@@ -47,8 +47,13 @@ def _imgflow_dir() -> Optional[Path]:
     configured = hub_settings.get("imgflow_dir")
     if configured:
         candidates.append(Path(str(configured)))
-    root = Path(__file__).resolve().parents[3]  # IvyeaOps install root
-    candidates += [root / "amazon-image-workflow", root.parent / "amazon-image-workflow"]
+    # runtime_root() resolves to the exe's dir when frozen (Windows x64) and the
+    # repo root from source — using __file__.parents[3] would point inside the
+    # PyInstaller _MEIPASS temp dir for the exe and never find the shipped folder.
+    from app.core.version import runtime_root
+    root = runtime_root()
+    candidates += [root / "amazon-image-workflow", root.parent / "amazon-image-workflow",
+                   Path(__file__).resolve().parents[3] / "amazon-image-workflow"]
     for d in candidates:
         try:
             if d.is_dir() and any((d / f).exists() for f in _COMPOSE_FILES):
