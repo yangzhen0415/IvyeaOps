@@ -198,7 +198,16 @@ function Install-GBrain {
     # "No database URL". Capture output and verify the result.
     Write-Info "Initializing GBrain local knowledge base (PGLite)..."
     Push-Location $brain
-    $gbInit = & $bun.Source run $gbrainCli init --pglite 2>&1 | Out-String
+    # init --pglite creates the DB successfully, but a post-init advisory step
+    # (gbrain looks for GStack / shells out to a tool that doesn't exist on
+    # Windows) writes "The system cannot find the path specified" to stderr and
+    # exits non-zero. With $ErrorActionPreference='Stop' that aborts the whole
+    # installer BEFORE the success check below — even though the brain is ready.
+    # Run it under EA=Continue + try/catch so the DB-created check decides success.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { $gbInit = & $bun.Source run $gbrainCli init --pglite 2>&1 | Out-String } catch { $gbInit = "$_" }
+    $ErrorActionPreference = $prevEAP
     Pop-Location
     $gbCfg = "$env:USERPROFILE\.gbrain\config.json"
     if ((Test-Path $gbCfg) -and ((Get-Content $gbCfg -Raw) -match '"database_path"')) {
