@@ -239,47 +239,22 @@ def _run_with_control_window() -> None:
     ui = "Microsoft YaHei UI"
     mono = "Consolas"
 
+    # Native window: keeps the taskbar entry (an overrideredirect/borderless window
+    # silently drops out of the taskbar — that's why it "disappeared") and gets
+    # Windows 11's own rounded corners for free. Just style it as a light card.
     root = tk.Tk()
     root.title("IvyeaOps")
     root.resizable(False, False)
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 3}")
-
-    rounded = False
     try:
-        root.overrideredirect(True)        # borderless
-        root.attributes("-transparentcolor", KEY)
-        rounded = True
-    except Exception:
-        rounded = False
-    try:
-        root.attributes("-topmost", False)
         root.iconbitmap(str(_runtime_root() / "client" / "public" / "favicon.ico"))
     except Exception:
         pass
+    root.configure(bg=card)
 
-    canvas = tk.Canvas(root, width=W, height=H, highlightthickness=0, bd=0,
-                       bg=KEY if rounded else card)
-    canvas.pack(fill="both", expand=True)
-
-    def _round_rect(c, x1, y1, x2, y2, r, fill):
-        c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, width=0)
-        c.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, width=0)
-        for (ax, ay, start) in ((x1, y1, 90), (x2 - 2 * r, y1, 0),
-                                (x1, y2 - 2 * r, 180), (x2 - 2 * r, y2 - 2 * r, 270)):
-            c.create_arc(ax, ay, ax + 2 * r, ay + 2 * r, start=start, extent=90,
-                         style="pieslice", fill=fill, width=0)
-
-    # 1px border ring (slightly larger card behind the fill), then the card.
-    if rounded:
-        _round_rect(canvas, 0, 0, W, H, RADIUS, fill=border)
-        _round_rect(canvas, 1, 1, W - 1, H - 1, RADIUS - 1, fill=card)
-    else:
-        canvas.configure(bg=card)
-
-    # Content lives in a frame floated over the rounded card.
-    frame = tk.Frame(canvas, bg=card)
-    canvas.create_window(W // 2, H // 2, window=frame, width=W - 44, height=H - 40)
+    frame = tk.Frame(root, bg=card, padx=26, pady=20)
+    frame.pack(fill="both", expand=True)
 
     stopping = False
 
@@ -301,21 +276,14 @@ def _run_with_control_window() -> None:
 
         threading.Thread(target=finish, daemon=True).start()
 
-    # Title bar: brand + status dot + custom close. Draggable to move the window.
+    # Header: brand + status dot (native title bar provides the window controls).
     header = tk.Frame(frame, bg=card)
     header.pack(fill="x")
-    brand = tk.Label(header, text="IvyeaOps", bg=card, fg=fg, font=(ui, 14, "bold"))
+    brand = tk.Label(header, text="IvyeaOps", bg=card, fg=fg, font=(ui, 15, "bold"))
     brand.pack(side="left")
-    close_btn = tk.Label(header, text="✕", bg=card, fg=faint, cursor="hand2",
-                         font=(ui, 11))
-    close_btn.pack(side="right", padx=(6, 0))
-    close_btn.bind("<Button-1>", lambda _e: stop_server())
-    close_btn.bind("<Enter>", lambda _e: close_btn.configure(fg=red))
-    close_btn.bind("<Leave>", lambda _e: close_btn.configure(fg=faint))
     dot = tk.Label(header, text="●", bg=card, fg=amber, font=(ui, 11))
     dot.pack(side="right")
 
-    # Drag the window by the header / brand (borderless has no native title bar).
     _drag = {"x": 0, "y": 0}
 
     def _drag_start(e):

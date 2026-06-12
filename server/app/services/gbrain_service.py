@@ -57,6 +57,40 @@ def _gbrain_bin() -> str:
     return str(Path.home() / ".bun" / "bin" / name)
 
 
+def _bun_bin() -> Optional[str]:
+    found = shutil.which("bun")
+    if found:
+        return found
+    cand = Path.home() / ".bun" / "bin" / ("bun.exe" if os.name == "nt" else "bun")
+    return str(cand) if cand.exists() else None
+
+
+def _gbrain_cli_ts() -> Path:
+    return Path.home() / ".bun" / "install" / "global" / "node_modules" / "gbrain" / "src" / "cli.ts"
+
+
+def _gbrain_cmd() -> Optional[list[str]]:
+    """ARGV prefix to invoke gbrain. On Windows the bun-generated .exe shim is
+    broken ("The system cannot find the path specified"), so run the TypeScript
+    entry directly via `bun run <cli.ts>` — which works cross-platform (verified).
+    POSIX uses the gbrain binary/symlink. Returns None if neither is available."""
+    if os.name == "nt":
+        bun = _bun_bin()
+        cli = _gbrain_cli_ts()
+        if bun and cli.exists():
+            return [bun, "run", str(cli)]
+        # Fall through to the shim if the package layout is unexpected.
+    gb = _gbrain_bin()
+    if Path(gb).exists() or shutil.which("gbrain"):
+        return [gb]
+    if os.name == "nt":
+        bun = _bun_bin()
+        cli = _gbrain_cli_ts()
+        if bun and cli.exists():
+            return [bun, "run", str(cli)]
+    return None
+
+
 MAX_QUERY_CHARS = 500
 MAX_FILE_BYTES = 512 * 1024
 MAX_WRITE_BYTES = 512 * 1024
@@ -85,11 +119,12 @@ def _env() -> dict[str, str]:
 
 
 def _run_gbrain(args: list[str], timeout: int = 30) -> CommandResult:
-    if not Path(_gbrain_bin()).exists():
-        raise GBrainError(f"gbrain binary not found: {_gbrain_bin()}")
+    prefix = _gbrain_cmd()
+    if not prefix:
+        raise GBrainError(f"gbrain not found (looked for the binary and {_gbrain_cli_ts()})")
     try:
         proc = subprocess.run(
-            [_gbrain_bin(), *args],
+            [*prefix, *args],
             cwd=str(_brain_root()) if _brain_root().exists() else str(Path.home()),
             env=_env(),
             text=True,
@@ -241,10 +276,14 @@ def ensure_db_ready() -> dict[str, Any]:
         res["db_ready"] = True
         return res
     out = ""
+    prefix = _gbrain_cmd()
+    if not prefix:
+        res["hint"] = "未找到 gbrain，请先在「系统配置 → 系统状态」安装/修复 GBrain。"
+        return res
     try:
         Path(_brain_root()).mkdir(parents=True, exist_ok=True)
         proc = subprocess.run(
-            [_gbrain_bin(), "init", "--pglite"], cwd=str(_brain_root()), env=_env(),
+            [*prefix, "init", "--pglite"], cwd=str(_brain_root()), env=_env(),
             text=True, capture_output=True, timeout=120, **no_window_kwargs())
         out = (proc.stdout + proc.stderr).lower()
     except Exception as e:  # noqa: BLE001

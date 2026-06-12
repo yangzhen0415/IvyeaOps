@@ -181,23 +181,15 @@ function Install-GBrain {
     $ErrorActionPreference = $prevEAP
     & $bun.Source install -g $GbrainRef
     if ($LASTEXITCODE -ne 0) { throw "bun install -g $GbrainRef failed." }
-    # Bun 1.3+ blocks package postinstall/build scripts by default ("Blocked 1
-    # postinstall"). gbrain needs its build step to produce a working binary —
-    # without it, gbrain.exe runs and immediately errors "The system cannot find
-    # the path specified". Trust gbrain so the blocked script runs. Best-effort.
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try { & $bun.Source pm -g trust gbrain *>$null } catch {}
-    try { & $bun.Source pm -g trust --all *>$null } catch {}
-    $ErrorActionPreference = $prevEAP
     Refresh-Path
 
-    $gbrain = Get-Command gbrain -ErrorAction SilentlyContinue
-    if (-not $gbrain) {
-        $fallback = "$env:USERPROFILE\.bun\bin\gbrain.exe"
-        if (Test-Path $fallback) { $gbrain = [pscustomobject]@{ Source = $fallback } }
-    }
-    if (-not $gbrain) { throw "gbrain command not found after installation." }
+    # IMPORTANT: do NOT use the bun-generated gbrain.exe shim — on Windows it errors
+    # "The system cannot find the path specified" (it's a symlink-to-.ts trick that
+    # only works on POSIX). gbrain's entry is a TypeScript file; run it directly with
+    # `bun run <cli.ts>`, which works cross-platform (verified). The "Blocked 1
+    # postinstall" warning is just pglite's DB migration — not needed for init.
+    $gbrainCli = "$env:USERPROFILE\.bun\install\global\node_modules\gbrain\src\cli.ts"
+    if (-not (Test-Path $gbrainCli)) { throw "gbrain entry not found after install: $gbrainCli" }
 
     $brain = "$env:USERPROFILE\brain"
     if (-not (Test-Path $brain)) { New-Item -ItemType Directory -Path $brain | Out-Null }
@@ -206,7 +198,7 @@ function Install-GBrain {
     # "No database URL". Capture output and verify the result.
     Write-Info "Initializing GBrain local knowledge base (PGLite)..."
     Push-Location $brain
-    $gbInit = & $gbrain.Source init --pglite 2>&1 | Out-String
+    $gbInit = & $bun.Source run $gbrainCli init --pglite 2>&1 | Out-String
     Pop-Location
     $gbCfg = "$env:USERPROFILE\.gbrain\config.json"
     if ((Test-Path $gbCfg) -and ((Get-Content $gbCfg -Raw) -match '"database_path"')) {
@@ -214,9 +206,9 @@ function Install-GBrain {
     } else {
         Write-Warn "GBrain init did not complete — the board will error 'No database URL'."
         Write-Warn "gbrain init output:`n$gbInit"
-        Write-Warn "Retry: cd `"$brain`"; & `"$($gbrain.Source)`" init --pglite"
+        Write-Warn "Retry: cd `"$brain`"; & `"$($bun.Source)`" run `"$gbrainCli`" init --pglite"
     }
-    Write-Info "GBrain installed: $($gbrain.Source)"
+    Write-Info "GBrain installed (entry): $gbrainCli"
     Write-Info "Brain root: $brain"
 }
 
