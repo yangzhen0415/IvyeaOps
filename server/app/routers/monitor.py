@@ -105,7 +105,14 @@ def _memory() -> MemInfo:
     )
 
 
-def _disk(mount: str = "/") -> DiskInfo:
+def _default_mount() -> str:
+    # "/" on POSIX; the current drive root (e.g. "C:\\") on Windows, where "/"
+    # doesn't exist and psutil.disk_usage("/") would raise.
+    return os.path.abspath(os.sep)
+
+
+def _disk(mount: str | None = None) -> DiskInfo:
+    mount = mount or _default_mount()
     d = psutil.disk_usage(mount)
     # Find the block device backing this mount, then read raw capacity from
     # /sys/block/<dev>/size (sectors × 512). This is what cloud consoles report.
