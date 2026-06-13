@@ -220,28 +220,27 @@ def _run_with_control_window() -> None:
     server = uvicorn.Server(config)
     server_thread = threading.Thread(target=server.run, name="ivyeaops-server", daemon=True)
 
-    # ── Light, rounded, borderless "card" window ────────────────────────────
-    # Clean high-end look: no native title bar, a rounded light card (transparent
-    # corners via the Windows -transparentcolor key), custom drag + close.
-    W, H, RADIUS = 460, 268, 18
-    KEY = "#ff00ff"        # transparency key (won't appear in the UI)
-    card = "#fbfbf9"       # light card bg
-    sub = "#f1f1ee"        # subtle row / button bg
-    sub_hi = "#e8e8e4"
-    border = "#e2e2dd"
-    fg = "#1a1a1a"
-    muted = "#5b5b55"
-    faint = "#9a9a93"
+    # ── Polished native window: rounded cards / badges / buttons drawn on a
+    # Canvas (Tk widgets are square), inside a normal window so the taskbar entry
+    # and the native title bar (min/max/close) stay. Status goes in the title.
+    W, H = 600, 384
+    white = "#ffffff"
+    cbord = "#e5e7eb"      # card border
+    badge_bg = "#dcfce7"   # light-green icon badge
+    label_fg = "#4b5563"
+    val_fg = "#374151"
+    faint = "#9ca3af"
     green = "#16a34a"
     green_hi = "#15803d"
-    amber = "#d97706"
+    amber_bg = "#fffbeb"
+    amber_bd = "#fde68a"
+    amber_fg = "#b45309"
     red = "#dc2626"
+    red_bd = "#fca5a5"
+    red_hi = "#fef2f2"
     ui = "Microsoft YaHei UI"
     mono = "Consolas"
 
-    # Native window: keeps the taskbar entry (an overrideredirect/borderless window
-    # silently drops out of the taskbar — that's why it "disappeared") and gets
-    # Windows 11's own rounded corners for free. Just style it as a light card.
     root = tk.Tk()
     root.title("IvyeaOps")
     root.resizable(False, False)
@@ -251,35 +250,40 @@ def _run_with_control_window() -> None:
         root.iconbitmap(str(_runtime_root() / "client" / "public" / "favicon.ico"))
     except Exception:
         pass
-    root.configure(bg=card)
+    root.configure(bg=white)
+
+    cv = tk.Canvas(root, width=W, height=H, bg=white, highlightthickness=0, bd=0)
+    cv.pack(fill="both", expand=True)
+
+    def rr(x1, y1, x2, y2, r, fill, tags=()):
+        cv.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline=fill, tags=tags)
+        cv.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline=fill, tags=tags)
+        for ax, ay, st in ((x1, y1, 90), (x2 - 2 * r, y1, 0),
+                           (x1, y2 - 2 * r, 180), (x2 - 2 * r, y2 - 2 * r, 270)):
+            cv.create_arc(ax, ay, ax + 2 * r, ay + 2 * r, start=st, extent=90,
+                          style="pieslice", fill=fill, outline=fill, tags=tags)
+
+    def card(x1, y1, x2, y2, r, fill, border):
+        rr(x1, y1, x2, y2, r, border)
+        rr(x1 + 1, y1 + 1, x2 - 1, y2 - 1, r - 1, fill)
 
     stopping = False
 
     def open_browser() -> None:
         webbrowser.open(url)
 
-    # ── Coloured accent header band (brand + status pill) ───────────────────
-    band = tk.Frame(root, bg=green, height=62)
-    band.pack(fill="x")
-    band.pack_propagate(False)
-    band_in = tk.Frame(band, bg=green)
-    band_in.pack(fill="both", expand=True, padx=24)
-    tk.Label(band_in, text="✦  IvyeaOps", bg=green, fg="#ffffff",
-             font=(ui, 16, "bold")).pack(side="left")
-    pill = tk.Label(band_in, text="● 启动中", bg="#ffffff", fg=green,
-                    font=(ui, 9, "bold"), padx=11, pady=3)
-    pill.pack(side="right")
-
-    def set_status(full_text: str, pill_text: str, pill_fg: str) -> None:
-        status_var.set(full_text)
-        pill.configure(text=f"● {pill_text}", fg=pill_fg, bg="#ffffff")
+    def copy_url() -> None:
+        try:
+            root.clipboard_clear(); root.clipboard_append(url)
+        except Exception:
+            pass
 
     def stop_server() -> None:
         nonlocal stopping
         if stopping:
             return
         stopping = True
-        set_status("正在停止服务…", "停止中", faint)
+        root.title("IvyeaOps · 正在停止…")
         server.should_exit = True
 
         def finish() -> None:
@@ -288,58 +292,64 @@ def _run_with_control_window() -> None:
 
         threading.Thread(target=finish, daemon=True).start()
 
-    # ── Body card ───────────────────────────────────────────────────────────
-    body = tk.Frame(root, bg=card, padx=24, pady=18)
-    body.pack(fill="both", expand=True)
+    # Main card (address + version rows)
+    card(24, 24, W - 24, 192, 14, white, cbord)
+    # address badge + globe icon
+    rr(44, 52, 84, 92, 10, badge_bg)
+    gx, gy = 64, 72
+    cv.create_oval(gx - 12, gy - 12, gx + 12, gy + 12, outline=green, width=2)
+    cv.create_oval(gx - 5, gy - 12, gx + 5, gy + 12, outline=green, width=1)
+    cv.create_line(gx - 12, gy, gx + 12, gy, fill=green, width=1)
+    cv.create_text(104, gy, text="地址", anchor="w", fill=label_fg, font=(ui, 12))
+    cv.create_text(168, gy, text=url, anchor="w", fill=green, font=(mono, 13),
+                   tags=("link",))
+    # copy button
+    rr(468, 54, 560, 90, 9, cbord, ("copy", "copy_bg"))
+    rr(469, 55, 559, 89, 8, white, ("copy", "copy_bg"))
+    cv.create_text(514, 72, text="⧉  复制", fill=val_fg, font=(ui, 11), tags=("copy",))
+    # divider
+    cv.create_line(44, 122, W - 44, 122, fill=cbord)
+    # version badge + box icon
+    rr(44, 138, 84, 178, 10, badge_bg)
+    bx, by = 64, 158
+    cv.create_rectangle(bx - 11, by - 9, bx + 11, by + 9, outline=green, width=2)
+    cv.create_line(bx - 11, by - 2, bx + 11, by - 2, fill=green, width=1)
+    cv.create_line(bx, by - 9, bx, by - 2, fill=green, width=1)
+    cv.create_text(104, by, text="版本", anchor="w", fill=label_fg, font=(ui, 12))
+    cv.create_text(168, by, text=app_version(), anchor="w", fill=val_fg, font=(mono, 12))
 
-    status_var = tk.StringVar(value="正在启动服务…")
-    tk.Label(body, textvariable=status_var, bg=card, fg=fg, anchor="w",
-             font=(ui, 11)).pack(fill="x", pady=(2, 12))
+    # Warning bar
+    card(24, 212, W - 24, 256, 10, amber_bg, amber_bd)
+    cv.create_text(46, 234, text="⚠", fill=amber_fg, font=(ui, 13), anchor="w")
+    cv.create_text(72, 234, text="关闭窗口将停止后台服务", fill=amber_fg,
+                   font=(ui, 10), anchor="w")
 
-    info = tk.Frame(body, bg=sub, padx=14, pady=12)
-    info.pack(fill="x")
+    # Buttons
+    rr(24, 280, 292, 356, 13, green, ("open", "open_bg"))
+    cv.create_text(158, 318, text=">_   打开控制台", fill=white,
+                   font=(ui, 13, "bold"), tags=("open",))
+    rr(308, 280, W - 24, 356, 13, red_bd, ("stop", "stop_ring"))
+    rr(309, 281, W - 25, 355, 12, white, ("stop", "stop_bg"))
+    cv.create_text(442, 318, text="⏻   停止并退出", fill=red,
+                   font=(ui, 13, "bold"), tags=("stop",))
 
-    def _row(parent, label: str) -> tk.Frame:
-        r = tk.Frame(parent, bg=sub)
-        r.pack(fill="x", pady=2)
-        tk.Label(r, text=label, bg=sub, fg=faint, width=5, anchor="w",
-                 font=(mono, 9)).pack(side="left")
-        return r
+    def _hover(tag_bg, normal, hi):
+        cv.tag_bind(tag_bg.replace("_bg", "").replace("_ring", ""), "<Enter>",
+                    lambda _e: (cv.itemconfigure(tag_bg, fill=hi, outline=hi),
+                                cv.config(cursor="hand2")))
+        cv.tag_bind(tag_bg.replace("_bg", "").replace("_ring", ""), "<Leave>",
+                    lambda _e: (cv.itemconfigure(tag_bg, fill=normal, outline=normal),
+                                cv.config(cursor="")))
 
-    r1 = _row(info, "地址")
-    link = tk.Label(r1, text=url, bg=sub, fg=green, cursor="hand2",
-                    font=(mono, 10, "underline"))
-    link.pack(side="left")
-    link.bind("<Button-1>", lambda _e: open_browser())
-    link.bind("<Enter>", lambda _e: link.configure(fg=green_hi))
-    link.bind("<Leave>", lambda _e: link.configure(fg=green))
-    r2 = _row(info, "版本")
-    tk.Label(r2, text=app_version(), bg=sub, fg=muted, font=(mono, 9)).pack(side="left")
-
-    tk.Label(body, text="关闭窗口将停止后台服务", bg=card, fg=faint,
-             font=(ui, 8)).pack(anchor="w", pady=(12, 14))
-
-    buttons = tk.Frame(body, bg=card)
-    buttons.pack(fill="x", side="bottom")
-
-    def _styled_btn(parent, text, command, *, primary: bool) -> tk.Button:
-        b = tk.Button(
-            parent, text=text, command=command, relief="flat", bd=0,
-            cursor="hand2", padx=18, pady=7,
-            bg=green if primary else sub,
-            fg="#ffffff" if primary else fg,
-            activebackground=green_hi if primary else sub_hi,
-            activeforeground="#ffffff" if primary else fg,
-            font=(ui, 9, "bold") if primary else (ui, 9),
-        )
-        hin = green_hi if primary else sub_hi
-        hout = green if primary else sub
-        b.bind("<Enter>", lambda _e: b.configure(bg=hin))
-        b.bind("<Leave>", lambda _e: b.configure(bg=hout))
-        return b
-
-    _styled_btn(buttons, "打开控制台", open_browser, primary=True).pack(side="left")
-    _styled_btn(buttons, "停止并退出", stop_server, primary=False).pack(side="left", padx=(10, 0))
+    cv.tag_bind("open", "<Button-1>", lambda _e: open_browser())
+    _hover("open_bg", green, green_hi)
+    cv.tag_bind("stop", "<Button-1>", lambda _e: stop_server())
+    _hover("stop_bg", white, red_hi)
+    cv.tag_bind("copy", "<Button-1>", lambda _e: copy_url())
+    _hover("copy_bg", white, "#f3f4f6")
+    cv.tag_bind("link", "<Button-1>", lambda _e: open_browser())
+    cv.tag_bind("link", "<Enter>", lambda _e: cv.config(cursor="hand2"))
+    cv.tag_bind("link", "<Leave>", lambda _e: cv.config(cursor=""))
 
     root.protocol("WM_DELETE_WINDOW", stop_server)
     server_thread.start()
@@ -349,13 +359,11 @@ def _run_with_control_window() -> None:
         if stopping:
             return
         if server_thread.is_alive():
-            if _already_running(settings.host, settings.port):
-                set_status("服务运行中，可在浏览器中使用", "运行中", green)
-            else:
-                set_status("正在启动服务…", "启动中", amber)
+            running = _already_running(settings.host, settings.port)
+            root.title("IvyeaOps · 运行中" if running else "IvyeaOps · 启动中…")
             root.after(1000, poll)
             return
-        set_status("服务已停止", "已停止", red)
+        root.title("IvyeaOps · 已停止")
         messagebox.showwarning("IvyeaOps", "IvyeaOps 服务已停止。如需排错，请查看 logs\\ivyeaops.err.log。")
         root.destroy()
 
