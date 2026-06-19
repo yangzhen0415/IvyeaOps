@@ -187,7 +187,7 @@ export default function ImageTranslate() {
   };
 
   return (
-    <div style={{ padding: 16, height: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="image-translate-page" style={{ padding: 16, height: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t)", fontFamily: "var(--font)" }}>一键图片翻译</div>
         <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4 }}>
@@ -195,10 +195,10 @@ export default function ImageTranslate() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(320px, 1.05fr)", gap: 12, minHeight: 0 }}>
+      <div className="image-translate-layout" style={{ flex: 1, display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(320px, 1.05fr)", gap: 12, minHeight: 0 }}>
         {/* ── 图片工作区 ── */}
-        <div style={{ display: "flex", flexDirection: "column", border: "1px solid var(--b)", borderRadius: 8, overflow: "hidden", minHeight: 0 }}>
-          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg2)" }}>
+        <div className="image-translate-panel image-translate-workspace" style={{ display: "flex", flexDirection: "column", border: "1px solid var(--b)", borderRadius: 8, overflow: "hidden", minHeight: 0 }}>
+          <div className="image-translate-panel-head" style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg2)" }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t)" }}>图片工作区</span>
             <button className="tbtn" style={{ fontSize: 11 }} disabled={uploading} onClick={() => fileRef.current?.click()}>
               {uploading ? "上传中…" : "＋ 上传图片"}
@@ -207,16 +207,16 @@ export default function ImageTranslate() {
           </div>
 
           {/* Folder bar */}
-          <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--b)", display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+          <div className="image-translate-folder-bar" style={{ padding: "8px 10px", borderBottom: "1px solid var(--b)", display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
             {folderChip(ALL, "全部", workspace.length)}
             {folderChip(UNFILED, "未分类", unfiledCount, { droppable: true })}
             {folders.map((f) => folderChip(f.id, f.name, f.count, { f, droppable: true }))}
             <button onClick={onNewFolder} title="新建文件夹"
               style={{ fontSize: 11, padding: "3px 8px", borderRadius: 13, border: "1px dashed var(--b)", background: "transparent", color: "var(--t3)", cursor: "pointer" }}>＋文件夹</button>
-            <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>拖图到文件夹可移动</span>
+            <span className="image-translate-drag-hint" style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>拖图到文件夹可移动</span>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
+          <div className="image-translate-scroll" style={{ flex: 1, overflowY: "auto", padding: 10 }}>
             {visible.length === 0 ? (
               <div style={{ color: "var(--t3)", fontSize: 12, textAlign: "center", padding: "32px 8px", lineHeight: 1.7 }}>
                 这里还没有图片。<br />上传图片，或在 Listing 工作台生成图片（会自动入库）。
@@ -249,17 +249,17 @@ export default function ImageTranslate() {
         </div>
 
         {/* ── 翻译面板 ── */}
-        <div style={{ display: "flex", flexDirection: "column", border: "1px solid var(--b)", borderRadius: 8, overflow: "hidden", minHeight: 0 }}>
-          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", fontSize: 13, fontWeight: 600, color: "var(--t)", background: "var(--bg2)", display: "flex", justifyContent: "space-between" }}>
+        <div className="image-translate-panel image-translate-controls" style={{ display: "flex", flexDirection: "column", border: "1px solid var(--b)", borderRadius: 8, overflow: "hidden", minHeight: 0 }}>
+          <div className="image-translate-panel-head" style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", fontSize: 13, fontWeight: 600, color: "var(--t)", background: "var(--bg2)", display: "flex", justifyContent: "space-between" }}>
             <span>翻译</span>
             <span style={{ fontSize: 11, color: "var(--t3)", fontWeight: 400 }}>已选 {selectedIds.size} 张源图</span>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="image-translate-scroll" style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
             {/* selected sources strip */}
             <div>
-              <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>源图（左侧点选可多选批量）</div>
+              <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>源图（点选可多选批量）</div>
               {selectedIds.size === 0 ? (
-                <div style={{ fontSize: 12, color: "var(--t3)", padding: "12px 0" }}>← 从左侧工作区点选一张或多张图</div>
+                <div style={{ fontSize: 12, color: "var(--t3)", padding: "12px 0" }}>从图片工作区点选一张或多张图</div>
               ) : (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {Array.from(selectedIds).map((id) => {
@@ -287,7 +287,7 @@ export default function ImageTranslate() {
               </div>
             </div>
 
-            <button className="tbtn" disabled={selectedIds.size === 0 || picked.size === 0 || translating}
+            <button className="tbtn image-translate-primary-action" disabled={selectedIds.size === 0 || picked.size === 0 || translating}
               style={{ fontSize: 13, padding: "8px 0", fontWeight: 600,
                 background: (selectedIds.size === 0 || picked.size === 0) ? "var(--bg2)" : "var(--acc)",
                 color: (selectedIds.size === 0 || picked.size === 0) ? "var(--t3)" : "#fff",
