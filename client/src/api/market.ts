@@ -43,6 +43,13 @@ export interface ResearchReq {
   marketplace: string;
 }
 
+export interface ResearchSyncResult {
+  provider: string;
+  elapsed_s: number;
+  report: string;
+  warnings: string[];
+}
+
 export type SseEvent =
   | { type: "phase"; phase: string }
   | { type: "progress"; step: string; done: number; total: number }
@@ -89,6 +96,21 @@ export function streamResearch(
       }
     }
   });
+}
+
+export async function fetchResearchSync(req: ResearchReq, signal?: AbortSignal): Promise<ResearchSyncResult> {
+  const r = await fetch("/api/market/research-sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(req),
+    signal,
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => "");
+    throw new Error(`HTTP ${r.status}: ${text}`);
+  }
+  return r.json();
 }
 
 export interface PulseResult {

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: ivyea-ops
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: false
+    disk:
+      name: ivyea-ops-data
+      mountPath: /app/data
+      sizeGB: 5
+    envVars:
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: IVYEA_OPS_SECRET
+        generateValue: true
+      - key: IVYEA_OPS_DEV
+        value: "0"
+      - key: IVYEA_OPS_USER
+        value: admin
+      - key: IVYEA_OPS_ALLOWED_ORIGINS
+        sync: false
+      - key: IVYEA_OPS_COOKIE_DOMAIN
+        value: ""

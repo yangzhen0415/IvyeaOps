@@ -125,6 +125,110 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
+def _compact_preview(value, limit: int = 700) -> str:
+    try:
+        text = json.dumps(value, ensure_ascii=False, indent=2)
+    except Exception:
+        text = str(value)
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "\n..."
+
+
+def _count_items(value) -> int:
+    if isinstance(value, list):
+        return len(value)
+    if isinstance(value, dict):
+        for key in ("data", "items", "results", "list", "records", "rows"):
+            items = value.get(key)
+            if isinstance(items, list):
+                return len(items)
+    return 0
+
+
+def _local_report(mode: str, query: str, marketplace: str, data: dict, errors: list[str]) -> str:
+    """Deterministic report used when live data exists but no text AI is configured.
+
+    This keeps the market workbench testable after Sorftime succeeds, while still
+    making it clear that strategic prose needs a configured LLM provider.
+    """
+    title = "关键词" if mode == "keyword" else "ASIN"
+    ok_tools = list(data.keys())
+    lines: list[str] = [
+        f"# 《{query}》市场调研报告（Amazon {marketplace}）",
+        "",
+        "> 当前未配置可用文本 AI，系统已切换为本地结构化报告模式。以下内容基于已采集到的 Sorftime 数据自动整理，可用于测试工作台流程、历史记录和导出。",
+        "",
+        "## 执行状态",
+        "",
+        f"- 分析对象：{title} `{query}`",
+        f"- 数据源：Sorftime",
+        f"- 成功采集：{len(ok_tools)} 个模块" + (f"（{', '.join(ok_tools)}）" if ok_tools else ""),
+        f"- 失败/缺失：{len(errors)} 项",
+    ]
+    if errors:
+        lines.extend(["", "### 采集提醒", ""])
+        lines.extend(f"- {err}" for err in errors[:12])
+
+    lines.extend(["", "## 数据模块概览", ""])
+    if not data:
+        lines.extend([
+            "没有拿到可用的 Sorftime 数据。请检查 `系统配置 -> 数据源` 中的 Sorftime Key 是否有效，或该 key 是否拥有对应工具权限。",
+            "",
+            "页面本身已可运行；当前阻塞点是上游数据或 AI provider 配置。",
+        ])
+        return "\n".join(lines)
+
+    lines.extend([
+        "| 模块 | 记录数/结构 | 用途 |",
+        "|---|---:|---|",
+    ])
+    usage = {
+        "keyword_detail": "关键词搜索量、CPC、转化率等核心指标",
+        "keyword_trend": "季节性与趋势判断",
+        "keyword_extends": "长尾词机会池",
+        "keyword_search_results": "首页竞品与坑位格局",
+        "category_search_from_product_name": "类目节点识别",
+        "similar_product_feature": "共性卖点和差异点",
+        "potential_product": "潜力产品参考",
+        "category_report": "类目容量与价格带",
+        "product_detail_list": "头部竞品详情",
+        "product_report": "ASIN 基础经营画像",
+        "product_trend": "销量/价格趋势",
+        "product_traffic_terms": "主要流量词",
+        "product_reviews": "评论痛点",
+        "product_variations": "变体结构",
+        "competitor_product_keywords": "竞品关键词机会",
+    }
+    for key, value in data.items():
+        count = _count_items(value)
+        shape = f"{count} 条" if count else type(value).__name__
+        lines.append(f"| `{key}` | {shape} | {usage.get(key, '原始数据模块')} |")
+
+    lines.extend([
+        "",
+        "## 初步判断",
+        "",
+        "- 若 `keyword_detail` 可用，优先看搜索量、CPC、CVR 和竞争品数量，判断该词是否值得进入。",
+        "- 若 `keyword_search_results` 或 `category_report` 可用，优先比较首页价格带、评论门槛、评分和头部集中度。",
+        "- 若 `keyword_extends` 可用，把长尾词按搜索量、CPC、竞争强度拆成主攻词、测试词和否定观察词。",
+        "- 若 `product_reviews` 或 `similar_product_feature` 可用，把高频差评转成 Listing、图片和产品差异化动作。",
+        "",
+        "## 下一步动作",
+        "",
+        "1. 在 `系统配置 -> AI 服务/全局兜底大模型` 配置一个文本模型后重新生成，可得到完整策略报告。",
+        "2. 继续用当前报告测试历史记录、导出、页面交互和数据源链路。",
+        "3. 如果采集提醒里出现 Authentication required，说明 Sorftime key 或该工具权限仍需在 Sorftime 后台确认。",
+        "",
+        "## 原始数据预览",
+        "",
+    ])
+    for key, value in data.items():
+        lines.extend([f"### {key}", "", "```json", _compact_preview(value), "```", ""])
+    return "\n".join(lines).strip()
+
+
 # SSE comment line; clients ignore it but it keeps proxy/browser idle
 # timers from killing the connection while we wait on slow CLI runners.
 _SSE_HEARTBEAT = ":hb\n\n"
@@ -276,7 +380,11 @@ async def _run_research(req: ResearchReq) -> AsyncGenerator[str, None]:
                 continue
             provider = prov
             if prov == "error":
-                yield _sse({"type": "error", "detail": chunk})
+                yield _sse({"type": "warn", "detail": "AI 合成不可用，已切换为本地结构化报告"})
+                report = _local_report(req.mode, req.query, req.marketplace, data, pipe_errors)
+                yield _sse({"type": "token", "text": report, "provider": "local-report"})
+                elapsed = round(time.time() - start, 1)
+                yield _sse({"type": "done", "provider": "local-report", "elapsed_s": elapsed})
                 return
             yield _sse({"type": "token", "text": chunk, "provider": prov})
 
@@ -308,6 +416,38 @@ async def market_research(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/research-sync")
+async def market_research_sync(
+    req: ResearchReq,
+    _user: str = Depends(require_user),
+) -> dict:
+    """Non-streaming research endpoint for reverse proxies that buffer/cancel SSE.
+
+    Netlify + temporary tunnel deployments are useful for quick previews, but
+    they are not reliable for long-lived SSE responses. This endpoint keeps the
+    same data path and returns one JSON payload at the end.
+    """
+    if not req.query.strip():
+        raise HTTPException(400, "query cannot be empty")
+    if req.mode not in ("keyword", "asin"):
+        raise HTTPException(400, "mode must be keyword or asin")
+
+    start = time.time()
+    errors: list[str] = []
+    if req.mode == "keyword":
+        data, errors = await sorftime_service.keyword_pipeline(req.query, req.marketplace)
+    else:
+        data, errors = await sorftime_service.asin_pipeline(req.query, req.marketplace)
+
+    report = _local_report(req.mode, req.query, req.marketplace, data, errors)
+    return {
+        "provider": "local-report",
+        "elapsed_s": round(time.time() - start, 1),
+        "report": report,
+        "warnings": errors,
+    }
 
 
 # ── Pulse endpoint (lightweight: keyword_detail + keyword_trend only) ─────────

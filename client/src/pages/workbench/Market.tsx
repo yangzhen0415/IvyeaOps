@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   streamResearch,
+  fetchResearchSync,
   fetchHistory,
   saveHistoryEntry,
   deleteHistoryEntry,
@@ -159,6 +160,21 @@ export default function Market() {
     setErrorMsg("");
 
     try {
+      if (window.location.hostname.endsWith("netlify.app")) {
+        setProgress({ step: "keyword_pipeline", done: 1, total: 2 });
+        const result = await fetchResearchSync(
+          { mode, query: query.trim(), marketplace },
+          ctrl.signal,
+        );
+        setProvider(result.provider);
+        setWarnings(result.warnings || []);
+        setReport(result.report);
+        setElapsedS(result.elapsed_s);
+        setProgress({ step: "done", done: 2, total: 2 });
+        setPhase("done");
+        return;
+      }
+
       await streamResearch(
         { mode, query: query.trim(), marketplace },
         (evt: SseEvent) => {

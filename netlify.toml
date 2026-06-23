@@ -1,0 +1,21 @@
+[build]
+  command = "cd client && npm ci && npm run build"
+  publish = "client/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  # TEMP ONLY: this points to a Cloudflare quick tunnel on the local machine.
+  # For long-term use, replace it with the stable backend domain documented in
+  # docs/LONG_TERM_STABLE_DEPLOY.md.
+  from = "/api/*"
+  to = "https://generating-insider-holiday-urgent.trycloudflare.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

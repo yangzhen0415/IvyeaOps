@@ -40,3 +40,9 @@ dist.bak*
 
 # Local uploads
 saved-images/
+
+# Local Netlify folder
+.netlify
+
+# Local Codex/runtime scratch files
+/work/
