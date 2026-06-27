@@ -205,16 +205,16 @@
      body::before  ← warm corner vignette (lighten z-99)
      body::after   ← color-dodge fractalNoise grain (z-101)
    ───────────────────────────────────────────────────────────────── */
-html{height:100%;background:var(--bg);color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden;
+html{height:100%;background:var(--bg);color:var(--t);font-family:var(--font);font-size:15px;overflow:hidden;
      -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
 body{height:100%;
      background:linear-gradient(var(--bg-cover),var(--bg-cover)),url('/art/bg.png') center/cover no-repeat;
-     color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden}
-#root{height:100%;background:transparent;color:var(--t);font-family:var(--font);font-size:13px;overflow:hidden}
+     color:var(--t);font-family:var(--font);font-size:15px;overflow:hidden}
+#root{height:100%;background:transparent;color:var(--t);font-family:var(--font);font-size:15px;overflow:hidden}
 
 /* ── HiDPI / Retina ── */
 @media (-webkit-min-device-pixel-ratio:2),(min-resolution:192dpi){
-  html,body,#root{font-size:14px}
+  html,body,#root{font-size:15px}
 }
 
 /* Warm corner vignette — mirrors Hermes z-99 layer */
@@ -2630,4 +2630,128 @@ body::after{
     padding:9px 8px !important;
     font-size:12px !important;
   }
+}
+
+/* --- Readability bump -----------------------------------------------------
+   The workbench was originally tuned for very dense terminal-style screens.
+   Lift the common small text surfaces so it remains readable on projector,
+   remote desktop, and high-resolution monitors without redesigning layouts.
+*/
+.sb-logo-name,
+.ni,
+.tb-path,
+.theme-picker-card,
+.service-name,
+.proc-name,
+.agent-name,
+.ni-title,
+.sess-row,
+.meta-row,
+.meta-row .mk,
+.meta-row .mv,
+.ws-project-row,
+.ws-tab,
+.cmdk-row-title{
+  font-size:13px;
+}
+
+.sb-bot-text,
+.sb-update-btn,
+.tbtn,
+.tb-time,
+.ct,
+.ml,
+.ms,
+.tag,
+.tbl th,
+.service-desc,
+.proc-desc,
+.proc-resource,
+.rbtn,
+.ma .al,
+.cs,
+.term-prompt,
+.gauge-label,
+.gauge-val,
+.agent-role,
+.status-run,
+.status-idle,
+.status-err,
+.agent-log,
+.ni-meta,
+.sl,
+.log-line,
+.tab,
+.login-box .mark,
+.login-box label,
+.login-box .err,
+.cell-good,
+.cell-warn,
+.cell-bad,
+.act-boost,
+.act-cut,
+.act-pause,
+.act-watch,
+.act-new,
+.prio-p0,
+.prio-p1,
+.prio-p2{
+  font-size:12px;
+}
+
+.inp,
+.ci,
+.msg,
+.tbl td,
+.proc-tbl,
+.proc-sub,
+.proc-advanced,
+.proc-action,
+.proc-locked,
+.term,
+.term-in,
+.hs-advanced-toggle,
+.market-report-body,
+.asst-content,
+.ws-tr-msg-body{
+  font-size:13px;
+}
+
+.ptitle,
+.ns{
+  font-size:11px;
+}
+
+.login-box h1,
+.mv,
+.ws-main-h1,
+.market-empty-title,
+.pulse-header-title,
+.home-title{
+  font-size:16px;
+}
+
+.topbar,
+.sb-logo{
+  min-height:44px;
+}
+
+.ni{
+  padding-top:8px;
+  padding-bottom:8px;
+}
+
+.tbtn,
+.tab,
+.inp,
+.proc-action,
+.rbtn,
+.theme-picker-card{
+  line-height:1.45;
+}
+
+.tbl th,
+.tbl td{
+  padding-top:8px;
+  padding-bottom:8px;
 }
