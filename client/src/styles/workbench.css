@@ -3277,6 +3277,48 @@ textarea{min-height:76px}
   padding:18px 20px;
   gap:16px;
 }
+.modern-settings-page .hs-section{
+  overflow:visible !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+}
+.modern-settings-page .hs-section-hd{
+  border-radius:16px 16px 0 0;
+}
+.modern-settings-page .hs-fields{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr);
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow:visible !important;
+  opacity:1 !important;
+  visibility:visible !important;
+}
+.modern-settings-page .hs-field{
+  min-width:0;
+  height:auto !important;
+  max-height:none !important;
+  overflow:visible !important;
+}
+.modern-settings-page .hs-secret-row,
+.modern-settings-page .hs-input,
+.modern-settings-page .hs-test-row,
+.modern-settings-page .hs-row3{
+  position:relative;
+  z-index:1;
+}
+.modern-settings-page .hs-input{
+  min-height:42px;
+}
+.modern-settings-page .hs-test-row{
+  margin-top:8px;
+}
+.modern-settings-page .hs-advanced-body{
+  overflow:visible !important;
+  max-height:none !important;
+}
 .hs-row3{
   gap:16px;
 }
