@@ -698,7 +698,7 @@ export default function HubSettings() {
   if (loadErr) return <div className="hs-error">加载失败：{loadErr}</div>;
 
   return (
-    <div className="hs-page">
+    <div className="hs-page modern-page modern-settings-page">
 
       {/* ── Header ── */}
       <div className="hs-header">

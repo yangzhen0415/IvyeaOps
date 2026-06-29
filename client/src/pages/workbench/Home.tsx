@@ -75,7 +75,7 @@ export default function Home() {
   const currentMkt = MARKETPLACES.find(m => m.code === marketplace) ?? MARKETPLACES[0];
 
   return (
-    <div className="home-cockpit">
+    <div className="home-cockpit modern-page modern-home-page">
       {/* ── Top bar: title + date + global marketplace ── */}
       <div className="home-topbar">
         <span className="home-title">

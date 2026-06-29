@@ -216,7 +216,7 @@ export default function ImageGen() {
   };
 
   return (
-    <div className="market-page imggen-page">
+    <div className="market-page imggen-page modern-page modern-imagegen-page">
       {/* Bottom sheet backdrop */}
       {historyOpen && (
         <div

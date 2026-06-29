@@ -958,7 +958,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
   }
 
   return (
-    <div>
+    <div className="modern-page modern-listing-page">
       {previewUrl && (
         <div onClick={() => setPreviewUrl(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
           <img src={previewUrl} alt="" style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }} onClick={(e) => e.stopPropagation()} />

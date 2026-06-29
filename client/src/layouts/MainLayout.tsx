@@ -19,6 +19,7 @@ function BoardFallback() {
 import ManualModal from "../components/ManualModal";
 import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
+import ModernWorkbenchEffects from "../components/ui-modern/ModernWorkbenchEffects";
 import { TOURS, hasTour } from "../lib/tours";
 
 // Boards with long-running tasks (research / generation / audit). These are kept
@@ -394,6 +395,7 @@ export default function MainLayout() {
 
   return (
     <div className="app">
+      <ModernWorkbenchEffects />
       {/* SIDEBAR */}
       {isMobile && mobileMenu && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 998 }} onClick={() => setMobileMenu(false)} />}
       <aside className={"sb" + (collapsed && !mobileMenu ? " collapsed" : "")} style={isMobile ? { position: "fixed", zIndex: 999, height: "100%", width: 196, minWidth: 196, overflow: "auto", left: 0, transform: mobileMenu ? "translateX(0)" : "translateX(-200px)", transition: "transform .22s cubic-bezier(.4,0,.2,1)", willChange: "transform" } : undefined}>

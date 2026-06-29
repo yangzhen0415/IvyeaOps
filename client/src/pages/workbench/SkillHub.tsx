@@ -18,24 +18,15 @@ export default function SkillHub() {
   const [showGithubImport, setShowGithubImport] = useState(false);
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+    <div className="modern-page modern-skill-hub">
+      <div className="modern-page-head">
         <div className="ptitle" style={{ marginBottom: 0 }}>/ Skill 中心</div>
-        <div style={{ display: "flex", gap: 2 }}>
+        <div className="modern-segmented">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              style={{
-                padding: "5px 14px",
-                fontSize: 11,
-                border: "none",
-                borderRadius: 3,
-                cursor: "pointer",
-                background: tab === t.key ? "var(--acc)" : "var(--bg2)",
-                color: tab === t.key ? "#000" : "var(--t2)",
-                fontWeight: tab === t.key ? 600 : 400,
-              }}
+              className={tab === t.key ? "active" : ""}
             >
               {t.label}
             </button>

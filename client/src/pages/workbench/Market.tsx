@@ -327,7 +327,7 @@ export default function Market() {
     : phase === "synthesizing" ? 100 : 15;
 
   return (
-    <div className="market-page">
+    <div className="market-page modern-page modern-market-page">
       {/* Header row */}
       <div className="market-header">
         <span className="market-title">
