@@ -517,6 +517,49 @@ export async function adAuditDelete(jobId: string) {
   return data;
 }
 
+// --- Patent lookup ---
+
+export type PatentType = "invention" | "design";
+export type PatentLookupResponse = {
+  success: boolean;
+  code?: number | string | null;
+  message?: string | null;
+  request_id?: string | null;
+  patent_type: PatentType;
+  count: number;
+  called_at: string;
+  data?: any;
+  items: any[];
+};
+
+export async function patentStatus() {
+  const { data } = await api.get<{ configured: boolean }>("/patent/status");
+  return data;
+}
+
+export async function patentSearchInvention(payload: {
+  product_title: string;
+  product_description: string;
+  top_number: number;
+}) {
+  const { data } = await api.post<PatentLookupResponse>("/patent/invention/search", payload, { timeout: 120000 });
+  return data;
+}
+
+export async function patentSearchDesign(payload: {
+  product_title?: string;
+  product_description?: string;
+  regions: string[];
+  image_base64: string;
+  top_number: number;
+  enable_tro: boolean;
+  query_mode: "physical" | "line" | "hybrid";
+  enable_radar: boolean;
+}) {
+  const { data } = await api.post<PatentLookupResponse>("/patent/design/search", payload, { timeout: 120000 });
+  return data;
+}
+
 // --- Monitor ---
 
 export type MonitorSnapshot = {

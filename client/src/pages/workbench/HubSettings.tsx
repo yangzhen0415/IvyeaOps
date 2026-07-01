@@ -639,7 +639,7 @@ const EMPTY: HubSettings = {
   apimart_key: "", apimart_base: "https://api.apimart.ai/v1",
   text_ai_providers: "hermes,assistant,codex,claude",
   vision_ai_providers: "openai,assistant", deepseek_api_key: "", news_feeds: "",
-  sorftime_key: "", sif_key: "", sellersprite_key: "",
+  sorftime_key: "", sif_key: "", sellersprite_key: "", ruiguan_token: "",
   imgflow_url: "http://127.0.0.1:3001",
   gbrain_bin: "", brain_root: "", openai_api_key: "",
   alert_webhook: "", alert_app_id: "", alert_app_secret: "", alert_chat_id: "",
@@ -716,7 +716,7 @@ export default function HubSettings() {
       <Section
         title="数据源"
         desc={<>填 key 保存后<strong>自动配置到 Hermes MCP</strong>，无需手动操作。有哪个用哪个，都填则按情况择优调用。</>}
-        keys={["sorftime_key", "sif_key", "sellersprite_key", "apimart_key", "apimart_base"]}
+        keys={["sorftime_key", "sif_key", "sellersprite_key", "ruiguan_token", "apimart_key", "apimart_base"]}
         vals={vals} onSave={save}
       >
         <Field
@@ -741,6 +741,14 @@ export default function HubSettings() {
         >
           <SecretInput value={vals.sellersprite_key} onChange={v => set("sellersprite_key", v)} placeholder="你的卖家精灵 Secret Key" />
           <TestButton settingKey="sellersprite_key" value={vals.sellersprite_key} label="测试" />
+        </Field>
+
+        <Field
+          label={<><Tag kind="opt">可选</Tag>睿观 Token</>}
+          hint={<>用于「分析工具 / 专利查询」中的发明专利和外观专利检测。</>}
+        >
+          <SecretInput value={vals.ruiguan_token} onChange={v => set("ruiguan_token", v)} placeholder="Token" />
+          <TestButton settingKey="ruiguan_token" value={vals.ruiguan_token} label="测试" />
         </Field>
 
         <Field

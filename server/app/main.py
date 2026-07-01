@@ -44,6 +44,7 @@ from app.routers import deep_analysis as deep_analysis_router
 from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
 from app.routers import lingxing as lingxing_router
+from app.routers import patent as patent_router
 from app.routers import mcp as mcp_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
 
@@ -394,6 +395,7 @@ app.include_router(agents_api_router, prefix="/api/agents", tags=["agents"], dep
 app.include_router(agents_ws_router, prefix="/api/agents", tags=["agents-ws"])
 app.include_router(deep_analysis_router.router, prefix="/api/deep-analysis", tags=["deep-analysis"], dependencies=[Depends(require_module("tools"))])
 app.include_router(skill_tools_router.router, prefix="/api/skill-tools", tags=["skill-tools"], dependencies=[Depends(require_module("tools"))])
+app.include_router(patent_router.router, prefix="/api/patent", tags=["patent"], dependencies=[Depends(require_module("tools"))])
 # --- Admin-only: config / other users / infra (never grantable) ---
 app.include_router(hub_settings_router.router, prefix="/api", tags=["settings"], dependencies=_ADMIN)
 app.include_router(projects_router.router, prefix="/api", tags=["projects"], dependencies=_ADMIN)

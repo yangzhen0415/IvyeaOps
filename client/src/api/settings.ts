@@ -75,6 +75,7 @@ export interface HubSettings {
   sif_key: string;
   // SellerSprite — separate key, auto-registers stdio MCP server in Hermes
   sellersprite_key: string;
+  ruiguan_token: string;
   // Account (password_hash not exposed to frontend)
 }
 

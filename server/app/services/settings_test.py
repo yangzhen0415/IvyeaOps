@@ -181,6 +181,14 @@ async def _probe_sellersprite(key: str) -> Dict[str, Any]:
         return _err(str(e)[:200])
 
 
+async def _probe_ruiguan(token: str) -> Dict[str, Any]:
+    if not token:
+        return _err("未填写")
+    if len(token.strip()) < 8:
+        return _err("Token 看起来过短")
+    return _ok("已填写；睿观专利接口按次扣点，实际鉴权将在查询时验证")
+
+
 async def _probe_sorftime_placeholder() -> None:  # noqa: keep line count consistent
         return _err(f"调用失败：{e}")
 
@@ -383,6 +391,8 @@ async def test_value(key: str, value: Optional[str]) -> Dict[str, Any]:
         return await _probe_sif(val)
     if key == "sellersprite_key":
         return await _probe_sellersprite(val)
+    if key == "ruiguan_token":
+        return await _probe_ruiguan(val)
     if key == "openai_api_key":
         return await _probe_openai(val)
 

@@ -16,7 +16,7 @@ from app.core.version import app_version
 router = APIRouter()
 
 _SECRET_KEYS: List[str] = [
-    "apimart_key", "sorftime_key", "sif_key", "sellersprite_key",
+    "apimart_key", "sorftime_key", "sif_key", "sellersprite_key", "ruiguan_token",
     "hermes_api_key", "hermes_fallback_api_key", "gbrain_embed_api_key",
     "alert_app_secret", "alert_webhook", "openai_api_key",
     "lingxing_mcp_key", "lingxing_openapi_secret",

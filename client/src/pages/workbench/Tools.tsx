@@ -22,6 +22,7 @@ import {
 import AdAuditPanel from "./AdAuditPanel";
 import DeepAnalysis from "./DeepAnalysis";
 import DeepAnalysisPanel from "../../components/DeepAnalysisPanel";
+import PatentLookupPanel from "./PatentLookupPanel";
 
 const MARKETPLACES = ["US", "UK", "DE", "FR", "CA", "JP", "ES", "IT", "MX", "AU", "AE", "BR", "SA"];
 
@@ -40,6 +41,9 @@ export default function Tools() {
 
       {/* Primary tool: full-width ASIN audit */}
       <AsinAuditPanel />
+
+      {/* Patent lookup via Ruiguan API */}
+      <PatentLookupPanel />
 
       {/* Secondary: ad search-term report audit */}
       <AdAuditPanel />

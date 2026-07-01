@@ -64,6 +64,7 @@ _DEFAULTS: Dict[str, Any] = {
     "sif_key": "",           # sif.com — 深度分析工具箱（独立账号和 key）
     "sellersprite_key": "",  # sellersprite.com — 竞品关键词分析
     # Listing Generator — imgflow backend
+    "ruiguan_token": "",     # Ruiguan API Token for patent lookup
     "imgflow_url": "http://127.0.0.1:3001",
     # GBrain knowledge base
     "gbrain_bin": "",           # empty = use env / auto-detect
@@ -215,6 +216,7 @@ _ENV_MAP: Dict[str, str] = {
     "sorftime_key": "SORFTIME_KEY",
     "openai_api_key": "OPENAI_API_KEY",
     "gbrain_bin": "IVYEA_OPS_GBRAIN_BIN",
+    "ruiguan_token": "RUIGUAN_TOKEN",
     "brain_root": "IVYEA_OPS_BRAIN_ROOT",
     "alert_webhook": "IVYEA_OPS_ALERT_WEBHOOK",
     "alert_app_id": "IVYEA_OPS_ALERT_APP_ID",
