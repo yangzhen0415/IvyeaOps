@@ -261,13 +261,13 @@ async def _source_to_bytes(url: str) -> tuple[bytes, str]:
         return r.content, (r.headers.get("content-type") or "image/png").split(";")[0]
 
 
-async def _run_edit_job(job_id: str, model: str, prompt: str, size: str, key: str, base: str, image_url: str) -> None:
+async def _run_edit_job(job_id: str, model: str, prompt: str, size: str, key: str, base: str, image_url: str, n: int = 1) -> None:
     ts = _EDIT_JOBS.get(job_id, {}).get("ts", time.time())
     try:
         img, mime = await _source_to_bytes(image_url)
         ext = "jpg" if ("jpe" in mime or "jpg" in mime) else ("webp" if "webp" in mime else "png")
         files = {"image": (f"source.{ext}", img, mime or "image/png")}
-        data = {"model": model, "prompt": prompt, "size": size, "n": "1"}
+        data = {"model": model, "prompt": prompt, "size": size, "n": str(min(max(n, 1), 10))}
         async with httpx.AsyncClient(timeout=httpx.Timeout(280, connect=10)) as c:
             r = await c.post(f"{base}/images/edits", data=data, files=files,
                              headers={"Authorization": f"Bearer {key}"})
@@ -307,11 +307,11 @@ async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dic
         job_id = "edit_" + uuid.uuid4().hex[:16]
         _EDIT_JOBS[job_id] = {"status": "running", "images": [], "error": None, "ts": time.time()}
         _prune_edit_jobs()
-        asyncio.create_task(_run_edit_job(job_id, ic["model"], req.prompt, req.size, key, ic["base_url"], refs[0]))
+        asyncio.create_task(_run_edit_job(job_id, ic["model"], req.prompt, req.size, key, ic["base_url"], refs[0], req.n))
         return {"task_id": job_id}
 
     # Text-to-image
-    payload = {"model": ic["model"], "prompt": req.prompt, "n": min(max(req.n, 1), 4), "size": req.size}
+    payload = {"model": ic["model"], "prompt": req.prompt, "n": min(max(req.n, 1), 10), "size": req.size}
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as c:
             r = await c.post(f"{ic['base_url']}/images/generations", json=payload,

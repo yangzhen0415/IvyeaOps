@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
 import { submitImage, imageStatus } from "../../api/assistant";
+import ImageSpecPanel, {
+  DEFAULT_IMAGE_SPEC,
+  computeImageSize,
+  downloadImageAs,
+  normalizeImageSpec,
+  type ImageSpec,
+} from "../../components/ImageSpecPanel";
 
 // Datalist suggestions only — the size field is free-form, so any WxH works.
 const SIZES = ["1024x1024", "1024x1536", "1536x1024", "1200x1200", "1400x1400", "1600x1600", "2000x2000", "1200x800", "800x1200"];
@@ -24,6 +31,7 @@ interface ImageTurn {
   prompt: string;
   images: string[];
   source?: string;
+  spec?: ImageSpec;
   loading?: boolean;
   progress?: number;
   error?: string;
@@ -35,6 +43,7 @@ interface ImageSession {
   turns: ImageTurn[];
   size: string;
   n: number;
+  spec?: ImageSpec;
   updatedAt: number;
 }
 
@@ -57,8 +66,9 @@ export default function ImageGen() {
   const [sessions, setSessions] = useState<ImageSession[]>(loadSessions);
   const [currentId, setCurrentId] = useState<string>(() => Date.now().toString());
   const [turns, setTurns] = useState<ImageTurn[]>([]);
-  const [size, setSize] = useState(SIZES[0]);
-  const n = 1; // gpt-image returns a single image per request; count selector removed
+  const [spec, setSpec] = useState<ImageSpec>(DEFAULT_IMAGE_SPEC);
+  const size = computeImageSize(spec, SIZES[0]);
+  const n = spec.count;
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -98,7 +108,7 @@ export default function ImageGen() {
   useEffect(() => {
     const completed = turns.filter(t => !t.loading && t.images.length > 0);
     if (completed.length === 0) return;
-    const session: ImageSession = { id: currentId, title: sessionTitle(turns), turns, size, n, updatedAt: Date.now() };
+    const session: ImageSession = { id: currentId, title: sessionTitle(turns), turns, size, n, spec, updatedAt: Date.now() };
     setSessions(prev => {
       const idx = prev.findIndex(s => s.id === currentId);
       const next = idx >= 0
@@ -114,13 +124,15 @@ export default function ImageGen() {
     if (!text || loading) return;
     const turnId = Date.now().toString();
     const src = sourceImage;
-    const newTurn: ImageTurn = { id: turnId, prompt: text, images: [], source: src || undefined, loading: true, progress: 0 };
+    const nextSpec = normalizeImageSpec(spec, SIZES[0]);
+    const count = Math.max(1, Math.min(10, nextSpec.count));
+    const newTurn: ImageTurn = { id: turnId, prompt: text, images: [], source: src || undefined, spec: { ...nextSpec, count }, loading: true, progress: 0 };
     setTurns(prev => [...prev, newTurn]);
     setInput("");
     setLoading(true);
     try {
-      const sz = size.trim() || "1024x1024";
-      const taskId = await submitImage(text, sz, n, src ? [src] : undefined);
+      const sz = computeImageSize(nextSpec, SIZES[0]);
+      const taskId = await submitImage(text, sz, count, src ? [src] : undefined);
       const started = Date.now();
       timerRef.current = window.setInterval(async () => {
         try {
@@ -193,6 +205,7 @@ export default function ImageGen() {
     setTurns([]);
     setInput("");
     setSourceImage(null);
+    setSpec(DEFAULT_IMAGE_SPEC);
     setHistoryOpen(false);
   };
 
@@ -200,7 +213,7 @@ export default function ImageGen() {
     if (loading) return;
     setCurrentId(s.id);
     setTurns(s.turns);
-    setSize(s.size);
+    setSpec(normalizeImageSpec(s.spec, s.size || SIZES[0]));
     setInput("");
     setHistoryOpen(false);
   };
@@ -306,6 +319,8 @@ export default function ImageGen() {
         </div>
       </div>
 
+      <div className="imagegen-workspace">
+        <div className="imagegen-main">
       {/* Conversation body */}
       <div ref={bodyRef} className="imggen-body">
         {turns.length === 0 && (
@@ -346,7 +361,7 @@ export default function ImageGen() {
                   生成中（约 1 分钟）{turn.progress ? `… ${turn.progress}%` : "…"}
                 </div>
                 <div className="imggen-grid">
-                  {Array.from({ length: Math.max(1, n) }).map((_, i) => (
+                  {Array.from({ length: Math.max(1, turn.spec?.count || n) }).map((_, i) => (
                     <div key={i} className="imggen-card">
                       <div className="skeleton" style={{ width: "100%", height: 180, borderRadius: 6 }} />
                     </div>
@@ -361,6 +376,7 @@ export default function ImageGen() {
                   <div key={i} className="imggen-card">
                     <img src={u} alt="" />
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      <button className="tbtn" onClick={() => downloadImageAs(u, `ivyea_image_${turn.id}_${i + 1}`, turn.spec || spec)}>下载</button>
                       <a className="tbtn" href={u} target="_blank" rel="noreferrer">下载 / 查看</a>
                       <button className="tbtn" disabled={loading}
                         onClick={() => { setSourceImage(u); bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight }); }}
@@ -405,22 +421,24 @@ export default function ImageGen() {
           placeholder={sourceImage ? "描述如何修改这张图，Enter 发送（Shift+Enter 换行）" : (turns.length > 0 ? "继续描述修改要求，Enter 发送（Shift+Enter 换行）" : "描述你想要的图片，英文效果更佳，Enter 发送")}
           disabled={loading}
         />
-        <input
-          className="market-query-input"
-          style={{ flex: "0 0 auto", minWidth: 100, maxWidth: 130, textAlign: "center" }}
-          list="imggen-sizes"
-          value={size}
-          onChange={e => setSize(e.target.value.trim())}
-          disabled={loading}
-          title="图片尺寸（可自定义，如 1200x800；也可选预设）"
-          placeholder="宽x高"
-        />
-        <datalist id="imggen-sizes">
-          {SIZES.map(s => <option key={s} value={s} />)}
-        </datalist>
+        <div className="isp-pill" title="当前计算尺寸">{size}</div>
         <button className="market-btn market-btn-submit" onClick={run} disabled={loading || !input.trim()}>
           {loading ? <><span className="spin" style={{ marginRight: 6 }} />生成中…</> : "生成"}
         </button>
+      </div>
+        </div>
+        <aside className="imagegen-spec-rail">
+          <ImageSpecPanel
+            value={spec}
+            onChange={setSpec}
+            fallbackSize={SIZES[0]}
+            maxCount={10}
+            title="生成规格"
+          />
+          {sourceImage && (
+            <div className="isp-warn">已带入参考图，张数仍可滑动选择，最多 10 张；实际返回数量取决于模型与账号能力。</div>
+          )}
+        </aside>
       </div>
     </div>
   );

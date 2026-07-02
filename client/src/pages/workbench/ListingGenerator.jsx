@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../components/ConfirmDialog";
+import ImageSpecPanel, {
+  computeImageSize,
+  downloadImageAs,
+  normalizeImageSpec,
+  specFromSize,
+} from "../../components/ImageSpecPanel";
 import SheetSelect from "../../components/SheetSelect";
 import { marketplaceOptions } from "../../lib/marketplaces";
 import {
@@ -71,8 +77,17 @@ const EMPTY_TEMPLATE_DRAFTS = {
   aplus: { name: "", content: "" },
 };
 
+function withSlotSpec(slot) {
+  const spec = normalizeImageSpec(slot.spec, slot.size || "1024x1024");
+  return { ...slot, spec, size: computeImageSize(spec, slot.size || "1024x1024") };
+}
+
 function makeSlots(defaults) {
-  return defaults.map(([id, label, size]) => ({ id, label, size, prompt: "", url: "" }));
+  return defaults.map(([id, label, size]) => withSlotSpec({ id, label, size, prompt: "", url: "" }));
+}
+
+function slotSize(slot) {
+  return computeImageSize(slot.spec, slot.size || "1024x1024");
 }
 
 function colorValue(scheme, custom) {
@@ -82,11 +97,11 @@ function colorValue(scheme, custom) {
 }
 
 function sizesOf(slots) {
-  return Object.fromEntries(slots.map((s) => [s.id, s.size]));
+  return Object.fromEntries(slots.map((s) => [s.id, slotSize(s)]));
 }
 
 function slotPayload(slots) {
-  return slots.map(({ id, label, size }) => ({ id, label, size }));
+  return slots.map((slot) => ({ id: slot.id, label: slot.label, size: slotSize(slot) }));
 }
 
 function asList(value) {
@@ -256,8 +271,8 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
     if (p.image_slots) {
       try {
         const saved = JSON.parse(p.image_slots);
-        if (Array.isArray(saved.main)) setImageSlots(saved.main);
-        if (Array.isArray(saved.aplus)) setAplusSlots(saved.aplus);
+        if (Array.isArray(saved.main)) setImageSlots(saved.main.map(withSlotSpec));
+        if (Array.isArray(saved.aplus)) setAplusSlots(saved.aplus.map(withSlotSpec));
       } catch {}
     }
 
@@ -494,10 +509,12 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
 
   function addSlot(kind) {
     const id = `${kind}_${Date.now().toString(36)}`;
+    const size = kind === "aplus" ? "1464x600" : "1600x1600";
     const slot = {
       id,
       label: kind === "aplus" ? "自定义A+图片" : "自定义主图/副图",
-      size: kind === "aplus" ? "1464x600" : "1600x1600",
+      size,
+      spec: specFromSize(size),
       prompt: "",
       url: "",
     };
@@ -531,7 +548,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
       const res = await generateImagePrompt(activeId, {
         slot: slot.id,
         label: slot.label,
-        size: slot.size,
+        size: slotSize(slot),
         color_scheme: colorArg,
       });
       // Show the draft immediately so the user sees something before review
@@ -545,7 +562,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
           slot: slot.id,
           prompt: res.prompt,
           label: slot.label,
-          size: slot.size,
+          size: slotSize(slot),
           color_scheme: colorArg,
         });
         if (reviewed.prompt) {
@@ -574,7 +591,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
     }
     setLoading(`img-${slot.id}`);
     try {
-      const res = await generateImage(activeId, slot.prompt, slot.id, slot.size);
+      const res = await generateImage(activeId, slot.prompt, slot.id, slotSize(slot));
       updateSlot(isAplus ? "aplus" : "main", slot.id, { url: res.url || res.imageUrl || "" });
       const url = res.url || res.imageUrl || "";
       const nextSlots = (isAplus ? aplusSlots : imageSlots).map((s) => (s.id === slot.id ? { ...s, url } : s));
@@ -621,7 +638,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
       let generated = 0;
       for (const slot of slots) {
         if (!slot.prompt) continue;
-        const res = await generateImage(activeId, slot.prompt, slot.id, slot.size);
+        const res = await generateImage(activeId, slot.prompt, slot.id, slotSize(slot));
         const url = res.url || res.imageUrl || "";
         updateSlot(isAplus ? "aplus" : "main", slot.id, { url });
         const index = nextSlots.findIndex((s) => s.id === slot.id);
@@ -638,15 +655,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
 
   async function handleDownloadImage(slot) {
     try {
-      const resp = await fetch(slot.url);
-      if (!resp.ok) throw new Error("请求失败");
-      const blob = await resp.blob();
-      const ext = blob.type.includes("png") ? "png" : blob.type.includes("webp") ? "webp" : "jpg";
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${activeId}_${slot.id}.${ext}`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      await downloadImageAs(slot.url, `${activeId}_${slot.id}`, slot.spec);
     } catch {
       window.open(slot.url, "_blank");
     }
@@ -803,12 +812,20 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
           <div key={slot.id} style={{ border: "1px solid var(--b)", borderRadius: 4, padding: 8 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 118px auto", gap: 5, alignItems: "center", marginBottom: 6 }}>
               <input value={slot.label} onChange={(e) => updateSlot(kind, slot.id, { label: e.target.value })} style={inputStyle} />
-              <input list={`${slot.id}-sizes`} value={slot.size} onChange={(e) => updateSlot(kind, slot.id, { size: e.target.value })} style={inputStyle} />
+              <input list={`${slot.id}-sizes`} value={slot.size} onChange={(e) => updateSlot(kind, slot.id, { size: e.target.value, spec: specFromSize(e.target.value) })} style={inputStyle} />
               <datalist id={`${slot.id}-sizes`}>
                 {sizePresets.map((s) => <option key={s} value={s} />)}
               </datalist>
               <Btn danger disabled={busy || slots.length <= 1} onClick={() => removeSlot(kind, slot.id)}>删</Btn>
             </div>
+            <ImageSpecPanel
+              compact
+              value={slot.spec}
+              fallbackSize={slot.size}
+              maxCount={10}
+              title={isAplus ? "A+ 图片规格" : "主图规格"}
+              onChange={(nextSpec) => updateSlot(kind, slot.id, { spec: nextSpec, size: slotSize({ ...slot, spec: nextSpec }) })}
+            />
             {slot.url && <img src={slot.url} onClick={() => setPreviewUrl(slot.url)} style={{ width: "100%", height: isAplus ? 110 : 135, objectFit: "cover", borderRadius: 3, marginBottom: 5, cursor: "zoom-in" }} />}
             <textarea
               value={slot.prompt}
@@ -838,6 +855,90 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
 
   function renderImageTab(isAplus) {
     const slots = isAplus ? aplusSlots : imageSlots;
+    if (isAplus) {
+      const filledInfo = [
+        productInfo.product_name,
+        productInfo.target_audience,
+        productInfo.selling_points,
+        productInfo.description,
+      ].filter((v) => String(v || "").trim()).length;
+      const generatedCount = slots.filter((s) => s.url).length;
+      const promptCount = slots.filter((s) => s.prompt).length;
+      const refCount = referenceImages.length + scraped.images.length;
+      const defaultSize = slotSize(slots[0] || { size: "1464x600" });
+      const steps = [
+        ["1", "填写商品资料", "品牌、产品名、类目、核心卖点和目标人群。"],
+        ["2", "上传参考图", "给 AI 看真实产品、材质和品牌方向。"],
+        ["3", "补充品牌风格", "固定色系、调性和视觉禁区。"],
+        ["4", "AI 策划分镜", "把 A+ 拆成桌面和移动端槽位。"],
+        ["5", "批量生成出图", "确认提示词后按槽位生成。"],
+      ];
+      return (
+        <div className="aplus-studio">
+          <aside className="aplus-guide">
+            <div className="aplus-step-title">新手引导</div>
+            <div className="aplus-step-desc">按顺序补齐资料，A+ 出图会更稳定。</div>
+            {steps.map(([no, title, desc], idx) => (
+              <div key={no} className={`aplus-step-card ${idx === 0 ? "active" : ""}`}>
+                <span>{no}</span>
+                <div>
+                  <strong>{title}</strong>
+                  <p>{desc}</p>
+                </div>
+              </div>
+            ))}
+          </aside>
+
+          <section className="card" style={{ padding: 14, minWidth: 0 }}>
+            <div className="aplus-toolbar">
+              <Btn onClick={() => handleGenGroupPrompts(true)} primary disabled={busy}>智能引导</Btn>
+              <Btn onClick={() => setActiveTab("aplus")} disabled={busy}>高级编辑</Btn>
+              <Btn onClick={() => setProductInfo(EMPTY_PRODUCT_INFO)} disabled={busy}>重置资料</Btn>
+              <Btn onClick={() => loadTemplates()} disabled={busy}>载入模板包</Btn>
+              <Btn onClick={handleSaveSlotConfig} disabled={busy}>保存配置</Btn>
+            </div>
+
+            <div className="aplus-form-grid">
+              <Field label="品牌"><input value={project?.brand || ""} readOnly placeholder="可在商品资料中沉淀品牌" style={inputStyle} /></Field>
+              <Field label="产品名称"><textarea value={productInfo.product_name} onChange={(e) => setProductInfo((p) => ({ ...p, product_name: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
+              <Field label="类目"><input value={project?.category || ""} readOnly placeholder="未采集到类目" style={inputStyle} /></Field>
+              <Field label="目标人群"><textarea value={productInfo.target_audience} onChange={(e) => setProductInfo((p) => ({ ...p, target_audience: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
+              <Field label="核心卖点"><textarea value={productInfo.selling_points} onChange={(e) => setProductInfo((p) => ({ ...p, selling_points: e.target.value }))} rows={3} style={{ ...inputStyle, resize: "vertical" }} /></Field>
+              <Field label="必含画面"><textarea value={productInfo.description} onChange={(e) => setProductInfo((p) => ({ ...p, description: e.target.value }))} rows={3} style={{ ...inputStyle, resize: "vertical" }} /></Field>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "12px 0" }}>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>视觉风格</span>
+              <SheetSelect value={aplusColorScheme} onChange={setAplusColorScheme} style={inputStyle} title="选择色系" options={COLOR_OPTIONS} />
+              {aplusColorScheme === "custom" && (
+                <input value={aplusCustomColor} onChange={(e) => setAplusCustomColor(e.target.value)} placeholder="输入自定义色系..." style={{ ...inputStyle, width: 220 }} />
+              )}
+              <Btn onClick={() => addSlot("aplus")} disabled={busy}>新增槽位</Btn>
+              <Btn onClick={() => handleGenGroupPrompts(true)} primary disabled={busy}>生成 A+ 提示词</Btn>
+              <Btn onClick={() => handleGenGroupImages(true)} primary disabled={busy}>生成 A+ 图片</Btn>
+            </div>
+
+            {renderSlotGrid(slots, true)}
+            {renderTemplates(true)}
+          </section>
+
+          <aside className="aplus-status">
+            <div className="aplus-status-card">
+              <div className="aplus-status-title">当前进度</div>
+              <div className="aplus-status-row"><span>资料完整度</span><strong>{filledInfo}/4</strong></div>
+              <div className="aplus-status-row"><span>参考图</span><strong>{refCount} 张</strong></div>
+              <div className="aplus-status-row"><span>已生成分镜</span><strong>{promptCount}/{slots.length}</strong></div>
+              <div className="aplus-status-row"><span>已出图</span><strong>{generatedCount} 张</strong></div>
+              <div className="aplus-status-row"><span>默认规格</span><strong>{defaultSize}</strong></div>
+            </div>
+            <div className="aplus-status-card">
+              <div className="aplus-status-title">AI 侧重点</div>
+              <div className="aplus-step-desc">优先保证产品一致性、卖点表达、桌面/移动端尺寸适配。</div>
+            </div>
+          </aside>
+        </div>
+      );
+    }
     return (
       <div className="card" style={{ padding: 12 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
