@@ -3,6 +3,7 @@ import { useMemo } from "react";
 export type ImageFormat = "png" | "jpeg" | "webp";
 export type SizeMode = "auto" | "ratio" | "manual";
 export type ResolutionTier = "auto" | "1k" | "2k" | "4k";
+export type ImageSpecVariant = "general" | "aplus";
 
 export interface ImageSpec {
   count: number;
@@ -26,7 +27,7 @@ export const DEFAULT_IMAGE_SPEC: ImageSpec = {
   quality: 92,
 };
 
-export const RATIO_PRESETS = [
+export const GENERAL_RATIO_PRESETS = [
   { value: "1:1", label: "1:1 正方形", w: 1, h: 1 },
   { value: "3:2", label: "3:2 横版", w: 3, h: 2 },
   { value: "2:3", label: "2:3 竖版", w: 2, h: 3 },
@@ -34,9 +35,19 @@ export const RATIO_PRESETS = [
   { value: "21:9", label: "21:9 超宽横版", w: 21, h: 9 },
   { value: "4:3", label: "4:3 横版", w: 4, h: 3 },
   { value: "3:4", label: "3:4 竖版", w: 3, h: 4 },
+] as const;
+
+export const APLUS_RATIO_PRESETS = [
+  ...GENERAL_RATIO_PRESETS,
   { value: "aplus-desktop", label: "A+ 桌面 1464x600", fixed: "1464x600" },
   { value: "aplus-mobile", label: "A+ 移动 600x450", fixed: "600x450" },
 ] as const;
+
+export const RATIO_PRESETS = GENERAL_RATIO_PRESETS;
+
+function ratioPresetsForVariant(variant: ImageSpecVariant = "general") {
+  return variant === "aplus" ? APLUS_RATIO_PRESETS : GENERAL_RATIO_PRESETS;
+}
 
 const TIER_SQUARE: Record<ResolutionTier, number> = {
   auto: 1024,
@@ -78,14 +89,15 @@ export function specFromSize(size?: string): ImageSpec {
   };
 }
 
-export function normalizeImageSpec(input?: Partial<ImageSpec>, fallbackSize?: string): ImageSpec {
+export function normalizeImageSpec(input?: Partial<ImageSpec>, fallbackSize?: string, variant: ImageSpecVariant = "general"): ImageSpec {
   const fallback = specFromSize(fallbackSize);
   const next = { ...fallback, ...(input || {}) };
+  const ratioPresets = ratioPresetsForVariant(variant);
   return {
     count: Math.max(1, Math.min(10, Math.round(Number(next.count) || 1))),
     sizeMode: ["auto", "ratio", "manual"].includes(next.sizeMode) ? next.sizeMode : "auto",
     resolutionTier: ["auto", "1k", "2k", "4k"].includes(next.resolutionTier) ? next.resolutionTier : "1k",
-    ratio: RATIO_PRESETS.some((r) => r.value === next.ratio) ? next.ratio : "1:1",
+    ratio: ratioPresets.some((r) => r.value === next.ratio) ? next.ratio : "1:1",
     width: cleanNumber(next.width, fallback.width),
     height: cleanNumber(next.height, fallback.height),
     format: ["png", "jpeg", "webp"].includes(next.format) ? next.format : "png",
@@ -93,8 +105,8 @@ export function normalizeImageSpec(input?: Partial<ImageSpec>, fallbackSize?: st
   };
 }
 
-export function computeImageSize(input: Partial<ImageSpec> | undefined, fallbackSize = "1024x1024") {
-  const spec = normalizeImageSpec(input, fallbackSize);
+export function computeImageSize(input: Partial<ImageSpec> | undefined, fallbackSize = "1024x1024", variant: ImageSpecVariant = "general") {
+  const spec = normalizeImageSpec(input, fallbackSize, variant);
   const fallback = parseSize(fallbackSize) || { width: 1024, height: 1024 };
 
   if (spec.sizeMode === "manual") {
@@ -107,7 +119,8 @@ export function computeImageSize(input: Partial<ImageSpec> | undefined, fallback
     return `${side}x${side}`;
   }
 
-  const ratio = RATIO_PRESETS.find((r) => r.value === spec.ratio) || RATIO_PRESETS[0];
+  const ratioPresets = ratioPresetsForVariant(variant);
+  const ratio = ratioPresets.find((r) => r.value === spec.ratio) || GENERAL_RATIO_PRESETS[0];
   if ("fixed" in ratio && ratio.fixed) return ratio.fixed;
 
   const w = "w" in ratio ? ratio.w : 1;
@@ -169,6 +182,7 @@ interface ImageSpecPanelProps {
   compact?: boolean;
   maxCount?: number;
   title?: string;
+  variant?: ImageSpecVariant;
 }
 
 export default function ImageSpecPanel({
@@ -178,12 +192,14 @@ export default function ImageSpecPanel({
   compact = false,
   maxCount = 10,
   title = "图片规格",
+  variant = "general",
 }: ImageSpecPanelProps) {
-  const spec = normalizeImageSpec(value, fallbackSize);
-  const computedSize = useMemo(() => computeImageSize(spec, fallbackSize), [spec, fallbackSize]);
+  const spec = normalizeImageSpec(value, fallbackSize, variant);
+  const ratioPresets = ratioPresetsForVariant(variant);
+  const computedSize = useMemo(() => computeImageSize(spec, fallbackSize, variant), [spec, fallbackSize, variant]);
   const countMax = Math.max(1, Math.min(10, Math.round(Number(maxCount) || 10)));
   const displayCount = Math.max(1, Math.min(countMax, spec.count));
-  const patch = (partial: Partial<ImageSpec>) => onChange(normalizeImageSpec({ ...spec, ...partial }, fallbackSize));
+  const patch = (partial: Partial<ImageSpec>) => onChange(normalizeImageSpec({ ...spec, ...partial }, fallbackSize, variant));
 
   return (
     <div className={`image-spec-panel ${compact ? "compact" : ""}`}>
@@ -243,7 +259,7 @@ export default function ImageSpecPanel({
         <label className="isp-field">
           <span>比例</span>
           <select value={spec.ratio} onChange={(e) => patch({ ratio: e.target.value })}>
-            {RATIO_PRESETS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {ratioPresets.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </label>
       )}

@@ -77,9 +77,17 @@ const EMPTY_TEMPLATE_DRAFTS = {
   aplus: { name: "", content: "" },
 };
 
+function slotSpecVariant(slot) {
+  const id = String(slot?.id || "");
+  const label = String(slot?.label || "");
+  if (id.startsWith("aplus") || id.startsWith("brand_story") || label.includes("A+")) return "aplus";
+  return "general";
+}
+
 function withSlotSpec(slot) {
-  const spec = normalizeImageSpec(slot.spec, slot.size || "1024x1024");
-  return { ...slot, spec, size: computeImageSize(spec, slot.size || "1024x1024") };
+  const variant = slotSpecVariant(slot);
+  const spec = normalizeImageSpec(slot.spec, slot.size || "1024x1024", variant);
+  return { ...slot, spec, size: computeImageSize(spec, slot.size || "1024x1024", variant) };
 }
 
 function makeSlots(defaults) {
@@ -87,7 +95,7 @@ function makeSlots(defaults) {
 }
 
 function slotSize(slot) {
-  return computeImageSize(slot.spec, slot.size || "1024x1024");
+  return computeImageSize(slot.spec, slot.size || "1024x1024", slotSpecVariant(slot));
 }
 
 function colorValue(scheme, custom) {
@@ -806,6 +814,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
   function renderSlotGrid(slots, isAplus) {
     const kind = isAplus ? "aplus" : "main";
     const sizePresets = isAplus ? SIZE_PRESETS_APLUS : SIZE_PRESETS_MAIN;
+    const specVariant = isAplus ? "aplus" : "general";
     return (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
         {slots.map((slot) => (
@@ -823,8 +832,9 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
               value={slot.spec}
               fallbackSize={slot.size}
               maxCount={10}
-              title={isAplus ? "A+ 图片规格" : "主图规格"}
-              onChange={(nextSpec) => updateSlot(kind, slot.id, { spec: nextSpec, size: slotSize({ ...slot, spec: nextSpec }) })}
+              variant={specVariant}
+              title={isAplus ? "A+ 图片规格" : "主图/附图规格"}
+              onChange={(nextSpec) => updateSlot(kind, slot.id, { spec: nextSpec, size: computeImageSize(nextSpec, slot.size, specVariant) })}
             />
             {slot.url && <img src={slot.url} onClick={() => setPreviewUrl(slot.url)} style={{ width: "100%", height: isAplus ? 110 : 135, objectFit: "cover", borderRadius: 3, marginBottom: 5, cursor: "zoom-in" }} />}
             <textarea

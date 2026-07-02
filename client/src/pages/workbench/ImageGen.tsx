@@ -433,6 +433,7 @@ export default function ImageGen() {
             onChange={setSpec}
             fallbackSize={SIZES[0]}
             maxCount={10}
+            variant="general"
             title="生成规格"
           />
           {sourceImage && (
