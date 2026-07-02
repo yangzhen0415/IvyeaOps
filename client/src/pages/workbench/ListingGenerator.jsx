@@ -84,6 +84,21 @@ function slotSpecVariant(slot) {
   return "general";
 }
 
+function slotDeviceLabel(slot) {
+  const id = String(slot?.id || "");
+  const size = String(slot?.size || "");
+  return id.includes("mobile") || size === "600x450" ? "移动端" : "桌面端";
+}
+
+function slotCompletion(slot) {
+  const prompt = String(slot?.prompt || "").trim();
+  return {
+    hasPrompt: Boolean(prompt),
+    hasImage: Boolean(slot?.url),
+    promptLength: prompt.length,
+  };
+}
+
 function withSlotSpec(slot) {
   const variant = slotSpecVariant(slot);
   const spec = normalizeImageSpec(slot.spec, slot.size || "1024x1024", variant);
@@ -815,11 +830,22 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
     const kind = isAplus ? "aplus" : "main";
     const sizePresets = isAplus ? SIZE_PRESETS_APLUS : SIZE_PRESETS_MAIN;
     const specVariant = isAplus ? "aplus" : "general";
+    const safeSlots = Array.isArray(slots) && slots.length > 0 ? slots : makeSlots(isAplus ? APLUS_DEFAULTS : MAIN_DEFAULTS);
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
-        {slots.map((slot) => (
-          <div key={slot.id} style={{ border: "1px solid var(--b)", borderRadius: 4, padding: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 118px auto", gap: 5, alignItems: "center", marginBottom: 6 }}>
+      <div className={isAplus ? "aplus-slot-grid" : ""} style={isAplus ? undefined : { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
+        {safeSlots.map((slot) => {
+          const completion = slotCompletion(slot);
+          return (
+          <div key={slot.id} className={isAplus ? "aplus-slot-card" : ""} style={isAplus ? undefined : { border: "1px solid var(--b)", borderRadius: 4, padding: 8 }}>
+            {isAplus && (
+              <div className="aplus-slot-kicker">
+                <span>{slotDeviceLabel(slot)}</span>
+                <span className={completion.hasImage ? "done" : completion.hasPrompt ? "ready" : ""}>
+                  {completion.hasImage ? "已出图" : completion.hasPrompt ? "待生成" : "待分镜"}
+                </span>
+              </div>
+            )}
+            <div className={isAplus ? "aplus-slot-head" : ""} style={isAplus ? undefined : { display: "grid", gridTemplateColumns: "1fr 118px auto", gap: 5, alignItems: "center", marginBottom: 6 }}>
               <input value={slot.label} onChange={(e) => updateSlot(kind, slot.id, { label: e.target.value })} style={inputStyle} />
               <input list={`${slot.id}-sizes`} value={slot.size} onChange={(e) => updateSlot(kind, slot.id, { size: e.target.value, spec: specFromSize(e.target.value) })} style={inputStyle} />
               <datalist id={`${slot.id}-sizes`}>
@@ -827,6 +853,12 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
               </datalist>
               <Btn danger disabled={busy || slots.length <= 1} onClick={() => removeSlot(kind, slot.id)}>删</Btn>
             </div>
+            {isAplus && (
+              <div className="aplus-slot-metrics">
+                <span>尺寸 <strong>{slotSize(slot)}</strong></span>
+                <span>提示词 <strong>{completion.promptLength || 0}</strong></span>
+              </div>
+            )}
             <ImageSpecPanel
               compact
               value={slot.spec}
@@ -836,15 +868,19 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
               title={isAplus ? "A+ 图片规格" : "主图/附图规格"}
               onChange={(nextSpec) => updateSlot(kind, slot.id, { spec: nextSpec, size: computeImageSize(nextSpec, slot.size, specVariant) })}
             />
-            {slot.url && <img src={slot.url} onClick={() => setPreviewUrl(slot.url)} style={{ width: "100%", height: isAplus ? 110 : 135, objectFit: "cover", borderRadius: 3, marginBottom: 5, cursor: "zoom-in" }} />}
+            {slot.url ? (
+              <img src={slot.url} onClick={() => setPreviewUrl(slot.url)} className={isAplus ? "aplus-slot-preview" : ""} style={isAplus ? undefined : { width: "100%", height: 135, objectFit: "cover", borderRadius: 3, marginBottom: 5, cursor: "zoom-in" }} />
+            ) : isAplus ? (
+              <div className="aplus-slot-empty">等待生成 A+ 画面</div>
+            ) : null}
             <textarea
               value={slot.prompt}
               onChange={(e) => updateSlot(kind, slot.id, { prompt: e.target.value })}
-              placeholder="图片提示词..."
-              rows={4}
-              style={{ ...inputStyle, width: "100%", resize: "vertical", marginBottom: 5, fontSize: 9 }}
+              placeholder={isAplus ? "写清楚这个 A+ 槽位的构图、卖点、文案留白和产品露出..." : "图片提示词..."}
+              rows={isAplus ? 5 : 4}
+              style={{ ...inputStyle, width: "100%", resize: "vertical", marginBottom: 5, fontSize: isAplus ? 12 : 9 }}
             />
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            <div className={isAplus ? "aplus-slot-actions" : ""} style={isAplus ? undefined : { display: "flex", gap: 5, flexWrap: "wrap" }}>
               <Btn onClick={() => handleGenOnePrompt(slot, isAplus)} disabled={busy}>
                 {loading === `prompt-gen-${slot.id}` ? "生成中..." : loading === `prompt-review-${slot.id}` ? "自检中..." : "单张提示词"}
               </Btn>
@@ -858,13 +894,15 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
               </Btn>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
 
   function renderImageTab(isAplus) {
-    const slots = isAplus ? aplusSlots : imageSlots;
+    const rawSlots = isAplus ? aplusSlots : imageSlots;
+    const slots = Array.isArray(rawSlots) && rawSlots.length > 0 ? rawSlots : makeSlots(isAplus ? APLUS_DEFAULTS : MAIN_DEFAULTS);
     if (isAplus) {
       const filledInfo = [
         productInfo.product_name,
@@ -902,10 +940,19 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
           <section className="card" style={{ padding: 14, minWidth: 0 }}>
             <div className="aplus-toolbar">
               <Btn onClick={() => handleGenGroupPrompts(true)} primary disabled={busy}>智能引导</Btn>
-              <Btn onClick={() => setActiveTab("aplus")} disabled={busy}>高级编辑</Btn>
+              <Btn onClick={() => setTab("aplus")} disabled={busy}>高级编辑</Btn>
               <Btn onClick={() => setProductInfo(EMPTY_PRODUCT_INFO)} disabled={busy}>重置资料</Btn>
               <Btn onClick={() => loadTemplates()} disabled={busy}>载入模板包</Btn>
               <Btn onClick={handleSaveSlotConfig} disabled={busy}>保存配置</Btn>
+            </div>
+
+            <div className="aplus-workbench-head">
+              <div>
+                <span>NEXA STYLE FLOW</span>
+                <h2>先把 A+ 资料讲清楚，再按槽位批量出图</h2>
+                <p>每个桌面/移动端槽位都会保存自己的尺寸、比例、格式和张数，避免主图规格与 A+ 规格互相污染。</p>
+              </div>
+              <div className="aplus-head-badge">{defaultSize}</div>
             </div>
 
             <div className="aplus-form-grid">
